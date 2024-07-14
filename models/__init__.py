@@ -3,6 +3,7 @@ from .unet import UNet
 import yaml
 from pathlib import Path
 import torch
+import torch.nn as nn
 
 CHECKPOINT_PATH = Path("checkpoints")
 CONFIG_PATH = Path("configs/")
@@ -33,6 +34,15 @@ def model_from_config(config, device="cpu"):
     
     model.to(device)
     return model
+
+
+def loss_fn_from_config(config):
+    loss_fn_name = config["loss_fn"]
+    if loss_fn_name == "BCE":
+        loss_fn = nn.BCELoss()
+    else:
+        raise ValueError(f"Invalid loss function, got {loss_fn_name}")
+    return loss_fn
 
 
 def model_from_checkpoint(checkpoint_path: str, device="cpu"):
