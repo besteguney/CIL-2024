@@ -1,0 +1,4 @@
+model_type: UNet
+wandb_group: UNet
+channels: [3,64,128,256,512,1024]
+activation: RELU
