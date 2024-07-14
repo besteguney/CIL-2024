@@ -19,7 +19,7 @@ def accuracy_fn(y_hat, y):
     # computes classification accuracy
     return (y_hat.round() == y.round()).float().mean()
     
-def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs):
+def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq):
     # training loop
     logdir = './tensorboard/net'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
@@ -50,24 +50,28 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
                 metrics[k].append(fn(y_hat, y).item())
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
 
-        # validation
-        model.eval()
-        with torch.no_grad():  # do not keep track of gradients
-            for (x, y) in eval_dataloader:
-                y_hat = model(x)  # forward pass
-                loss = loss_fn(y_hat, y)
+        if (eval_dataloader == None): 
+            continue
 
-                # log partial metrics
-                metrics['val_loss'].append(loss.item())
-                for k, fn in metric_fns.items():
-                    metrics['val_'+k].append(fn(y_hat, y).item())
+        if (epoch % val_freq == 0) or (epoch==n_epochs):
+            # validation
+            model.eval()
+            with torch.no_grad():  # do not keep track of gradients
+                for (x, y) in eval_dataloader:
+                    y_hat = model(x)  # forward pass
+                    loss = loss_fn(y_hat, y)
 
-        # summarize metrics, log to tensorboard and display
-        history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
-        for k, v in history[epoch].items():
-          writer.add_scalar(k, v, epoch)
-        print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-        utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+                    # log partial metrics
+                    metrics['val_loss'].append(loss.item())
+                    for k, fn in metric_fns.items():
+                        metrics['val_'+k].append(fn(y_hat, y).item())
+
+            # summarize metrics, log to tensorboard and display
+            history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
+            for k, v in history[epoch].items():
+                writer.add_scalar(k, v, epoch)
+            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
+            utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves
@@ -78,7 +82,7 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
     plt.legend()
     plt.show()
 
-def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs):
+def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq):
     # training loop
     logdir = './tensorboard/net'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
@@ -111,26 +115,30 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
                 metrics[k].append(fn(y_hat, y).item())
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
 
-        # validation
-        model.eval()
-        with torch.no_grad():  # do not keep track of gradients
-            for (x, y) in eval_dataloader:
-                y_hat = model(x)  # forward pass
-                loss = loss_fn(y_hat, y)
+        if (eval_dataloader == None): 
+            continue
 
-                # log partial metrics
-                metrics['val_loss'].append(loss.item())
-                tp, fp, fn, tn = smp.metrics.get_stats(y_hat.long(), y.long(), mode="binary")
-                metrics['f1_val'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
-                for k, fn in metric_fns.items():
-                    metrics['val_'+k].append(fn(y_hat, y).item())
+        elif (epoch % val_freq == 0) or (epoch==n_epochs):
+            # validation
+            model.eval()
+            with torch.no_grad():  # do not keep track of gradients
+                for (x, y) in eval_dataloader:
+                    y_hat = model(x)  # forward pass
+                    loss = loss_fn(y_hat, y)
 
-        # summarize metrics, log to tensorboard and display
-        history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
-        for k, v in history[epoch].items():
-          writer.add_scalar(k, v, epoch)
-        print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-        utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+                    # log partial metrics
+                    metrics['val_loss'].append(loss.item())
+                    tp, fp, fn, tn = smp.metrics.get_stats(y_hat.long(), y.long(), mode="binary")
+                    metrics['f1_val'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
+                    for k, fn in metric_fns.items():
+                        metrics['val_'+k].append(fn(y_hat, y).item())
+
+            # summarize metrics, log to tensorboard and display
+            history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
+            for k, v in history[epoch].items():
+                writer.add_scalar(k, v, epoch)
+            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
+            utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves
