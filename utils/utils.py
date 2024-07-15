@@ -10,6 +10,7 @@ from glob import glob
 from random import sample
 from PIL import Image
 from torch import nn
+import parameters as params
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
@@ -166,4 +167,3 @@ def overlay_image(image_array, mask_array):
     plt.imshow(mask_array, cmap='jet', alpha=0.5)
     plt.axis('off')
     plt.show()
-    
