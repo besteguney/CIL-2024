@@ -18,7 +18,8 @@ CHECKPOINT_PATH = Path("checkpoints")
 DATA_PATH = Path("data")
 
 # TODO: Somehow add support for other training loops (e.g. step function / multiple train functions)
-def train(model, optimizer, train_dl, val_dl, loss_fn, epoch_n, start_epoch = None, metric_fns = {}, config_name = None, save_interval = sys.maxsize):
+def train(model, optimizer, train_dl, val_dl, loss_fn, epoch_n, scheduler=None, start_epoch = None, metric_fns = {}, config_name = None, save_interval = sys.maxsize):
+    wandb.init(project="CIL",) # I am not sure if you guys can see it.
     model_path = CHECKPOINT_PATH / wandb.run.name
     model_path.mkdir(parents=True, exist_ok=True)
 
@@ -48,6 +49,9 @@ def train(model, optimizer, train_dl, val_dl, loss_fn, epoch_n, start_epoch = No
                 metrics[k].append(fn(y_hat, y).item())
             train_tqdm.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
 
+        if scheduler != None:
+            scheduler.step(loss)
+            
          # validation
         model.eval()
         with torch.no_grad():
