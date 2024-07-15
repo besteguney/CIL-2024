@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from components.blocks import Block
+from utils.blocks import Block
 from torch import nn
 
 # Discriminator network for the GANS

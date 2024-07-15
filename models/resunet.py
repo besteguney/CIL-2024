@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from components.blocks import ResidualConv
+from utils.blocks import ResidualConv
 from torch import nn
 
 class ResUnet(nn.Module):
