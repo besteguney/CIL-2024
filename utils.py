@@ -18,7 +18,7 @@ from tqdm.notebook import tqdm
 def load_all_from_path(path):
     # loads all HxW .pngs contained in path as a 4D np.array of shape (n_images, H, W, 3)
     # images are loaded as floats with values in the interval [0., 1.]
-    return np.stack([np.array(Image.open(f)) for f in sorted(glob(path + '/*.png'))]).astype(np.float32) / 255
+    return np.stack([np.array(Image.open(f)) for f in sorted(glob(path + '/*.png'))]).astype(np.float32) / 255.0
 
 def np_to_tensor(x, device):
     # allocates tensors from np.arrays
@@ -104,7 +104,7 @@ def load_the_checkpoint(model, checkpoint_path):
     model.load_state_dict(checkpoint['model_state_dict'])
     return model
 
-def create_submission(test_folder, test_subfolder, submission_filename, model, device, resize=384):
+def create_submission(test_folder, test_subfolder, submission_filename, model, device, resize=params.RESIZE):
     test_path = os.path.join(params.ROOT_PATH, test_folder, test_subfolder)
     test_filenames = (glob(test_path + '/*.png'))
     test_images = load_all_from_path(test_path)
@@ -130,3 +130,35 @@ def create_submission(test_folder, test_subfolder, submission_filename, model, d
             for i in range(patch_array.shape[0]):
                 for j in range(patch_array.shape[1]):
                     f.write("{:03d}_{}_{},{}\n".format(img_number, j*params.PATCH_SIZE, i*params.PATCH_SIZE, int(patch_array[i, j])))
+
+
+def load_images(image_folder_path, is_label = False):
+    images = []
+    for filename in os.listdir(image_folder_path):
+        img_path = os.path.join(image_folder_path, filename)
+        img = Image.open(img_path)
+        if (is_label):
+            img = img.convert('L')
+        elif img.mode == 'RGBA':
+            img = img.convert('RGB')
+        images.append(np.array(img))
+    return images
+
+def show_image(image_array, mask_array):
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].imshow(image_array)
+    ax[0].set_title('Image')
+    ax[0].axis('off')
+
+    ax[1].imshow(mask_array, cmap='gray')
+    ax[1].set_title('Mask')
+    ax[1].axis('off')
+
+    plt.show()
+
+def overlay_image(image_array, mask_array):
+    plt.figure(figsize=(6, 6))
+    plt.imshow(image_array)
+    plt.imshow(mask_array, cmap='jet', alpha=0.5)
+    plt.axis('off')
+    plt.show()
