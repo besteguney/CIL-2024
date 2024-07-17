@@ -9,4 +9,4 @@ N_ESTIMATORS = 3
 # Model Parameters
 N_EPOCHS = 100
 BATCH_SIZE = 4
-RESIZE = 256
+RESIZE = 384
