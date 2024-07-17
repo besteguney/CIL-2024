@@ -18,7 +18,7 @@ CHECKPOINT_PATH = Path("checkpoints")
 DATA_PATH = Path("data")
 
 # TODO: Somehow add support for other training loops (e.g. step function / multiple train functions)
-def train(model, optimizer, train_dl, val_dl, loss_fn, epoch_n, start_epoch = None, metric_fns = {}, config_name = None, save_interval = sys.maxsize):
+def train(model, optimizer, train_dl, val_dl, loss_fn, epoch_n, start_epoch = None, metric_fns = {}, wandb = None, config_name = None, save_interval = sys.maxsize):
     model_path = CHECKPOINT_PATH / wandb.run.name
     model_path.mkdir(parents=True, exist_ok=True)
 
