@@ -20,7 +20,7 @@ PATCH_SIZE = 16
 CUTOFF = 0.5
 ROOT_PATH = "./"
 
-       
+
 def patch_accuracy_fn(y_hat, y):
     # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
     h_patches = y.shape[-2] // params.PATCH_SIZE
@@ -199,3 +199,25 @@ def accuracy_fn(y_hat, y):
     # computes classification accuracy
     preds = to_preds(y_hat)
     return (preds == y.round()).float().mean()
+
+def ensemble_predict(models, weights, test_images):
+    if len(models) != len(weights):
+        raise ValueError("Number of models and weights must be the same")
+    
+    weights = np.array(weights)
+    weights = weights / np.sum(weights)
+    
+    predictions = []
+    
+    for model, weight in zip(models, weights):
+        # Assuming each model has a predict method
+        test_pred = [model(t).detach().cpu().numpy() for t in test_images.unsqueeze(1)]
+        test_pred = np.concatenate(test_pred, 0)
+        print(test_pred.shape)
+        test_pred= np.moveaxis(test_pred, 1, -1)
+        predictions.append(test_pred)
+
+    weighted_sum_tensor = np.zeros_like(predictions[0])
+    for tensor, weight in zip(predictions, weights):
+        weighted_sum_tensor += weight * tensor
+    return weighted_sum_tensor
