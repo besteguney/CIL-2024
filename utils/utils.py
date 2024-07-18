@@ -13,7 +13,7 @@ from torch import nn
 import parameters as params
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
-import smp
+import segmentation_models_pytorch as smp
 
 
 # Should this go somewhere else?
