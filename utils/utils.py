@@ -22,24 +22,6 @@ CUTOFF = 0.5
 ROOT_PATH = "./"
 
 
-def patch_accuracy_fn(y_hat, y):
-    # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
-    h_patches = y.shape[-2] // params.PATCH_SIZE
-    w_patches = y.shape[-1] // params.PATCH_SIZE
-    patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    return (patches == patches_hat).float().mean()
-
-def accuracy_fn(y_hat, y):
-    # computes classification accuracy
-    preds = to_preds(y_hat)
-    return (preds == y.round()).float().mean()
-
-def f1_fn(y_hat, y):
-    preds = to_preds(y_hat)
-    tp, fp, fn, tn = smp.metrics.get_stats(preds.long(), y.long(), mode="binary")
-    return smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise").item()
-
 def load_all_from_path(path):
     # loads all HxW .pngs contained in path as a 4D np.array of shape (n_images, H, W, 3)
     # images are loaded as floats with values in the interval [0., 1.]
@@ -215,6 +197,11 @@ def accuracy_fn(y_hat, y):
     # computes classification accuracy
     preds = to_preds(y_hat)
     return (preds == y.round()).float().mean()
+
+def f1_fn(y_hat, y):
+    preds = to_preds(y_hat)
+    tp, fp, fn, tn = smp.metrics.get_stats(preds.long(), y.long(), mode="binary")
+    return smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise")
 
 def ensemble_predict(models, weights, test_images):
     if len(models) != len(weights):
