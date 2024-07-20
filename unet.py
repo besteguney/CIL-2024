@@ -5,7 +5,7 @@ from torch import nn
 
 class UNet(nn.Module):
     # UNet-like architecture for single class semantic segmentation.
-    def __init__(self, chs=(3,64,128,256,512,1024), activation='RELU'):
+    def __init__(self, chs=(3,64,128,256,512,1024), activation='RELU', final_layer=True):
         super().__init__()
         enc_chs = chs  # number of channels in the encoder
         dec_chs = chs[::-1][:-1]  # number of channels in the decoder
@@ -18,7 +18,7 @@ class UNet(nn.Module):
         
         self.pool = nn.MaxPool2d(2)  # pooling layer (can be reused as it will not be trained)
         self.upconvs = nn.ModuleList([nn.ConvTranspose2d(in_ch, out_ch, 2, 2) for in_ch, out_ch in zip(dec_chs[:-1], dec_chs[1:])])  # deconvolution
-        self.head = nn.Sequential(nn.Conv2d(dec_chs[-1], 1, 1), nn.Sigmoid()) # 1x1 convolution for producing the output
+        self.head = nn.Sequential(nn.Conv2d(dec_chs[-1], 1, 1), nn.Sigmoid()) if final_layer else None # 1x1 convolution for producing the output
         self.activation = activation
     
     def forward(self, x):
@@ -34,4 +34,4 @@ class UNet(nn.Module):
             x = upconv(x)  # increase resolution
             x = torch.cat([x, feature], dim=1)  # concatenate skip features
             x = block(x)  # pass through the block
-        return self.head(x)  # reduce to 1 channel
+        return self.head(x) if self.head is not None else x  # reduce to 1 channel
