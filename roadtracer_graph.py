@@ -5,8 +5,7 @@ import numpy as np
 import cv2
 from math import sin, cos, pi, sqrt, inf
 from matplotlib.collections import LineCollection
-from scipy.ndimage import maximum_filter
-
+from roadtracer_utils import RoadTracerImage, get_circle_sample_points, angle_sample_points, linear_interpolation
 
 
 # DIST_SAMPLES = 1
@@ -20,12 +19,12 @@ from scipy.ndimage import maximum_filter
 # MERGE_DIST = STEP_SIZE / 1.3
 
 
-def graph_step(search_image, point, angle_samples, distance_samples, sample_radius):
+def graph_step(search_image, point, angle_samples, sample_radius):
     w, h = search_image.shape[:2]
 
-    samples = circle_sample_points(angle_samples, distance_samples, sample_radius) + point.astype(np.float32)
+    samples = get_circle_sample_points(point, angle_samples, sample_radius)
     scores = linear_interpolation(search_image, samples) # [distances, angles]
-    all_scores = np.sum(scores, 0)
+    # all_scores = scores #np.sum(scores, 0)
 
 
     # all_scores = []
@@ -42,7 +41,7 @@ def graph_step(search_image, point, angle_samples, distance_samples, sample_radi
     #     final_score = 0.0 if samples < DIST_SAMPLES_REQUIRED else score / samples
     #     all_scores.append(final_score)
     
-    return all_scores, angle_sample_points(angle_samples), circle_sample_points(angle_samples, None, sample_radius) + point
+    return scores, angle_sample_points(angle_samples), samples
 
 
 
@@ -130,14 +129,6 @@ def plot_graph(graph_root, search_image, active_node = None):
 
 
 
-def get_search_image(image):
-    dist_image = cv2.distanceTransform(image, 2, 3)
-    search_image = maximum_filter(dist_image, size=(7, 7), mode="constant") - dist_image < 2.5
-    search_image = np.where(np.logical_and(dist_image > 2, search_image), 1.0, 0.0)
-    return dist_image, search_image
-
-
-
 def find_graph(img, angle_samples, distance_samples, sample_radius):
     step_size = 10
 
@@ -155,7 +146,6 @@ def find_graph(img, angle_samples, distance_samples, sample_radius):
         root = Node(start_point)
         graph_root.children.append(root)
         
-
         queue = [root]
         while queue:
             v = queue[0]
@@ -174,8 +164,8 @@ def find_graph(img, angle_samples, distance_samples, sample_radius):
 
 
 
-def get_oracle_prediction(image: RoadTracerImage, point, graph: BaseNode, merge_distance):
-    scores, angles, pts = graph_step(image.distance, point, 40, 1, 10)
+def get_oracle_prediction(image: RoadTracerImage, point, graph: BaseNode, angle_samples, step_distance, merge_distance):
+    scores, angles, pts = graph_step(image.distance, point, angle_samples, step_distance)
     scores, angles, pts = filter_samples(scores, 4, angles, pts)
     
     for a, p in zip(angles, pts):
@@ -186,15 +176,7 @@ def get_oracle_prediction(image: RoadTracerImage, point, graph: BaseNode, merge_
 
 
 
-class RoadTracerImage:
-    def __init__(self, img, target):
-        self.image = img
-        self.distance, self.search = get_search_image((255*target).astype(np.uint8))
-        self.target = target
 
-        self.road_samples = np.stack(np.nonzero(self.target != 0), 1)
-        self.road_samples = self.road_samples[np.argsort(self.distance[self.road_samples[..., 0], self.road_samples[..., 1]])]
-        self.negative_samples = np.stack(np.nonzero(self.target == 0), 1)
 
 
 

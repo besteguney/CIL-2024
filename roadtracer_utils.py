@@ -1,8 +1,33 @@
 import numpy as np
+import cv2
+import scipy.ndimage
+from math import pi
 
 
 
+def to_pytorch_img(img):
+    return np.moveaxis(img, -1, 0)
 
+def get_search_image(image):
+    dist_image = cv2.distanceTransform(image, 2, 3)
+    search_image = scipy.ndimage.maximum_filter(dist_image, size=(7, 7), mode="constant") - dist_image < 2.5
+    search_image = np.where(np.logical_and(dist_image > 2, search_image), 1.0, 0.0)
+    return dist_image, search_image
+
+
+class RoadTracerImage:
+    def __init__(self, img, target, distance=None, search=None):
+        self.image = img
+        if distance is None or search is None:
+            self.distance, self.search = get_search_image((255*target).astype(np.uint8))
+        else:
+            self.distance, self.search = distance, search
+        self.target = target
+
+        self.road_samples = np.stack(np.nonzero(self.target != 0), 1)
+        self.road_samples = self.road_samples[np.argsort(self.distance[self.road_samples[..., 0], self.road_samples[..., 1]])]
+        self.negative_samples = np.stack(np.nonzero(self.target == 0), 1)
+    
 
 def linear_interpolation(img, points):
     px, py = points[..., 0], points[..., 1]
@@ -26,11 +51,18 @@ def angle_sample_points(angle_samples):
 
 
 # return a [distances, angles, 2] array of points describing sampling locations on a circle
-def get_circle_sample_points(angle_samples, sample_radius, dist_samples = None):        
+def get_circle_sample_points(center, angle_samples, sample_radius, dist_samples = None):        
     angles = angle_sample_points(angle_samples)
     directions = np.stack((np.cos(angles), np.sin(angles)), 1)  #shape [angles, 2]
     if dist_samples is None:
-        return np.array([[sample_radius]]) * directions
+        return center + np.array([[sample_radius]]) * directions
 
     distances = np.linspace(sample_radius, 0, dist_samples, endpoint=False, dtype=np.float32)
-    return directions[np.newaxis] * distances[:, np.newaxis, np.newaxis]
+    return center + directions[np.newaxis] * distances[:, np.newaxis, np.newaxis]
+
+
+def get_patch(image, point, patch_size):
+    step = (patch_size-1)/2
+    coords = np.linspace(-step, step, patch_size)
+    grid = np.stack(np.meshgrid(coords+point[0], coords+point[1]), 2)
+    return linear_interpolation(image, grid)

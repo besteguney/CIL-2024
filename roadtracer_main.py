@@ -3,53 +3,34 @@ import torch
 import numpy as np
 from parameters import *
 
-import utils
 import roadtracer_train
-
 import roadtracer_dataset
+from roadtracer_model1 import RoadTracerModel
 
-import matplotlib.pyplot as plt
-from torch import nn
-from roadtracer_model import RoadTracerModel
+# import faulthandler
+# faulthandler.enable()
 
-
-roadtracer_angle_samples = 256
-roadtracer_view_radius = 60
-roadtracer_sample_radius = 10
-roadtracer_distance_samples = 64
+roadtracer_angle_samples = 64
+roadtracer_patch_size = 128
 batch_size = 8
+epochs = 10
+step_distance = 10.0
+merge_distance = step_distance / 1.3
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-train_dataset, val_dataset = roadtracer_dataset.load_all_data(
+train_images, val_images = roadtracer_dataset.load_all_data(
     ROOT_PATH,
-    device,
-    batch_size,
-    VAL_SIZE,
-    roadtracer_angle_samples,
-    roadtracer_distance_samples,
-    roadtracer_sample_radius,
-    roadtracer_view_radius
+    VAL_SIZE
 )
 
-
-
-def accuracy_fn(y_pred, y_true):
-    return ((y_pred > 0.5) == (y_true > 0.5)).float().mean().item()
-
-
-
-model = RoadTracerModel(roadtracer_distance_samples).to(device)
-# loss_fn = nn.BCELoss()
-# loss_fn = dice_loss
-
+model = RoadTracerModel(roadtracer_patch_size, num_angles=roadtracer_angle_samples).to(device)
 optimizer = torch.optim.Adam(model.parameters())
-metrics = {
-    # 'acc': accuracy_fn,
-    # 'patch_acc': patch_accuracy_fn,
-    # 'f1_score': f1_score_fn,
-    # 'f1_score_patches': f1_score_patches_fn
-}
 
-roadtracer_train.train(train_dataset, val_dataset, model, loss_fn, metrics, optimizer, N_EPOCHS)
+train_loop = roadtracer_train.GraphTrainingLoop(
+    train_images, val_images,
+    batch_size, epochs, roadtracer_angle_samples, roadtracer_patch_size,
+    step_distance, merge_distance
+)
+train_loop.train(model, optimizer)
