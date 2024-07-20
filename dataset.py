@@ -36,8 +36,8 @@ class ImageDataset(Dataset):
         # to keep things simple we will not apply transformations to each sample,
         # but it would be a very good idea to look into preprocessing
         # if self.transform is None:
-        return x, y
-        # return self.transform([x, y])
+        # return x, y
+        return self.transform([x, y])
 
     def __getitem__(self, item):
         return self._preprocess(utils.np_to_tensor(self.x[item], self.device), utils.np_to_tensor(self.y[[item]], self.device))
