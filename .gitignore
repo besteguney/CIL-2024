@@ -3,3 +3,4 @@ ethz-cil-road-segmentation-2024
 tensorboard
 .ipynb_checkpoints
 __pycache__
+tensorboard_old_runs

@@ -79,6 +79,10 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
         for k, v in history[epoch].items():
             writer.add_scalar(k, v, epoch)
         
+        if (epoch + 1) % 10 == 0:
+            # save model!!!
+            ...
+
         writer.flush()
         # print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
         # utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())

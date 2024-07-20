@@ -9,42 +9,15 @@ from scipy.ndimage import maximum_filter
 
 
 
-DIST_SAMPLES = 1
-ANGLE_SAMPLES = 60
-STEP_SIZE = 10.0
-DIST_FROM_PERCENT = 1.0
-DIST_TO_PERCENT = 1.0
+# DIST_SAMPLES = 1
+# ANGLE_SAMPLES = 60
+# STEP_SIZE = 10.0
+# DIST_FROM_PERCENT = 1.0
+# DIST_TO_PERCENT = 1.0
 
-DIST_SAMPLES_REQUIRED = 1
-VALID_POINT_MAX_RANGE = 4
-MERGE_DIST = STEP_SIZE / 1.3
-
-
-def linear_interpolation(img, points):
-    px, py = points[..., 0], points[..., 1]
-    w, h = img.shape[:2]
-    outside = np.logical_or(np.logical_or(px < 0, px >= w), np.logical_or(py < 0, py >= h))
-    
-    x0 = np.minimum(np.maximum(0, px.astype(np.int32)), w-1)
-    y0 = np.minimum(np.maximum(0, py.astype(np.int32)), h-1)
-    x1, y1 = np.minimum(x0+1, w-1), np.minimum(y0+1, h-1)
-    a, b = px - x0, py - y0
-    if len(img.shape) == 3: # 3 dim image; [w, h, c]
-        a = a[..., np.newaxis]
-        b = b[..., np.newaxis]
-        outside = outside[..., np.newaxis]
-    result = img[x0, y0] * (1-a) * (1-b) + img[x1, y0] * a * (1-b) + img[x0, y1] * (1-a) * b + img[x1, y1] * a * b
-    return np.where(outside, 0.0, result)
-
-# return a [distances, angles, 2] array of points describing sampling locations on a circle
-def circle_sample_points(angle_samples, dist_samples, sample_radius):        
-    angles = np.linspace(0, 2*pi, angle_samples, endpoint=False, dtype=np.float32)
-    directions = np.stack((np.cos(angles), np.sin(angles)), 1)  #shape [angles, 2]
-    if dist_samples is None:
-        return np.array([[sample_radius]]) * directions
-
-    distances = np.linspace(sample_radius, 0, dist_samples, endpoint=False, dtype=np.float32)
-    return directions[np.newaxis] * distances[:, np.newaxis, np.newaxis]
+# DIST_SAMPLES_REQUIRED = 1
+# VALID_POINT_MAX_RANGE = 4
+# MERGE_DIST = STEP_SIZE / 1.3
 
 
 def graph_step(search_image, point, angle_samples, distance_samples, sample_radius):
@@ -69,20 +42,22 @@ def graph_step(search_image, point, angle_samples, distance_samples, sample_radi
     #     final_score = 0.0 if samples < DIST_SAMPLES_REQUIRED else score / samples
     #     all_scores.append(final_score)
     
-    return all_scores, circle_sample_points(angle_samples, None, sample_radius)
+    return all_scores, angle_sample_points(angle_samples), circle_sample_points(angle_samples, None, sample_radius) + point
 
 
-def filter_samples(next_points, scores, filter_range, score_threshold=0.4):
+
+def filter_samples(scores, filter_range, *more_data, score_threshold=1):
     angle_samples = len(scores)
-    valid_samples = []
-    for i in range(ANGLE_SAMPLES):
+    idx = []
+    for i in range(angle_samples):
         score = scores[i]
-        if score >= max(scores[j % angle_samples] for j in range(i - filter_range, i + filter_range + 1)) and score > score_threshold:
-            valid_samples.append(next_points[i])
+        if score >= max(scores[j % angle_samples] for j in range(i - filter_range, i + filter_range + 1) if j != i) and score >= score_threshold:
+            idx.append(i)
 
-    return valid_samples
+    return scores[idx], *[data[idx] for data in more_data]
 
-        
+
+
 def distance(p1, p2):
     return sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
@@ -118,6 +93,7 @@ class BaseNode:
 
     def size(self):
         return 1 + sum(c.size() for c in self.children)
+
 
 
 class Node (BaseNode):
@@ -162,9 +138,6 @@ def get_search_image(image):
 
 
 
-
-
-
 def find_graph(img, angle_samples, distance_samples, sample_radius):
     step_size = 10
 
@@ -201,10 +174,47 @@ def find_graph(img, angle_samples, distance_samples, sample_radius):
 
 
 
+def get_oracle_prediction(image: RoadTracerImage, point, graph: BaseNode, merge_distance):
+    scores, angles, pts = graph_step(image.distance, point, 40, 1, 10)
+    scores, angles, pts = filter_samples(scores, 4, angles, pts)
+    
+    for a, p in zip(angles, pts):
+        if graph.distance_to(p) > merge_distance:
+            # the oracle target for the network is this point
+            return a
+    return None
+
+
+
+class RoadTracerImage:
+    def __init__(self, img, target):
+        self.image = img
+        self.distance, self.search = get_search_image((255*target).astype(np.uint8))
+        self.target = target
+
+        self.road_samples = np.stack(np.nonzero(self.target != 0), 1)
+        self.road_samples = self.road_samples[np.argsort(self.distance[self.road_samples[..., 0], self.road_samples[..., 1]])]
+        self.negative_samples = np.stack(np.nonzero(self.target == 0), 1)
+
+
+
 if __name__ == "__main__":
     for img_name in glob.glob("ethz-cil-road-segmentation-2024/training/groundtruth/*"):
-        img = np.asarray(Image.open(img_name))
-        find_graph(img)
+        ground_truth = np.asarray(Image.open(img_name))
+        point = np.random.uniform(0, 400, (2,))
+        image = RoadTracerImage(None, ground_truth)
+
+        # find_graph(image.search.astype(np.uint8), 60, 1, 10)
+
+        scores, angles, pts = graph_step(image.distance, point, 64, 1, 10)
+        scores, angles, pts = filter_samples(scores, 4, angles, pts)
+        
+        plt.imshow(image.distance)
+        plt.scatter([point[1]], [point[0]], color="r")
+        plt.scatter(pts[:, 1], pts[:, 0], c=scores, cmap="turbo")
+        plt.show()
+        
+        # find_graph(img)
         
 
 

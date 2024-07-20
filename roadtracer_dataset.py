@@ -16,15 +16,6 @@ import matplotlib.pyplot as plt
 def to_pytorch_img(img):
     return np.moveaxis(img, -1, 0)
 
-class RoadTracerImage:
-    def __init__(self, img, target):
-        self.image = img
-        self.distance, self.search = get_search_image((255*target).astype(np.uint8))
-        self.target = target
-
-        self.road_samples = np.stack(np.nonzero(self.target != 0), 1)
-        self.negative_samples = np.stack(np.nonzero(self.target == 0), 1)
-
 
 class RoadTracerDataset(Dataset):
     # dataset class that deals with loading the data and making it available by index.
@@ -53,6 +44,9 @@ class RoadTracerDataset(Dataset):
         inputs = to_pytorch_img(linear_interpolation(image.image, sample_points))
         
         output_scores, output_points = graph_step(image.search, center, self.sample_angles, 1, self.sample_radius)
+        if np.max(output_scores) > 1:
+            print ("Normalization failure, dividing by max")
+            output_scores = output_scores / np.max(output_scores)
 
         return utils.np_to_tensor(inputs.astype(np.float32), self.device), utils.np_to_tensor(output_scores.astype(np.float32), self.device) #, linear_interpolation(image.distance, center)
 
