@@ -7,24 +7,7 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
-
-def to_preds(logits):
-    probs = torch.sigmoid(logits)
-    preds = (probs >= params.CUTOFF).float()
-    return preds
-        
-def patch_accuracy_fn(y_hat, y):
-    # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
-    h_patches = y.shape[-2] // params.PATCH_SIZE
-    w_patches = y.shape[-1] // params.PATCH_SIZE
-    patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    return (patches == patches_hat).float().mean()
-
-def accuracy_fn(y_hat, y):
-    # computes classification accuracy
-    preds = to_preds(y_hat)
-    return (preds == y.round()).float().mean()
+from utils.utils import accuracy_fn, to_preds
 
 def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
     # training loop

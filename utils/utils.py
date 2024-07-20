@@ -90,7 +90,7 @@ def show_val_samples(x, y, y_hat, segmentation=False):
         if imgs_to_draw > 1:
             for i in range(imgs_to_draw):
                 axs[0, i].imshow(np.moveaxis(x[i], 0, -1))
-                axs[1, i].imshow(np.concatenate([np.moveaxis(y_hat[i], 0, -1)] * 3, -1))
+                axs[1, i].imshow(np.concatenate([np.moveaxis(to_preds_array(y_hat[i]), 0, -1)] * 3, -1))
                 axs[2, i].imshow(np.concatenate([np.moveaxis(y[i], 0, -1)]*3, -1))
                 axs[0, i].set_title(f'Sample {i}')
                 axs[1, i].set_title(f'Predicted {i}')
@@ -100,7 +100,7 @@ def show_val_samples(x, y, y_hat, segmentation=False):
                 axs[2, i].set_axis_off()
         else:
             axs[0].imshow(np.moveaxis(x[0], 0, -1))
-            axs[1].imshow(np.concatenate([np.moveaxis(y_hat[0], 0, -1)] * 3, -1))
+            axs[1].imshow(np.concatenate([np.moveaxis(to_preds_array(y_hat[i]), 0, -1)] * 3, -1))
             axs[2].imshow(np.concatenate([np.moveaxis(y[0], 0, -1)]*3, -1))
             axs[0].set_title(f'Sample {0}')
             axs[1].set_title(f'Predicted {0}')
@@ -112,7 +112,7 @@ def show_val_samples(x, y, y_hat, segmentation=False):
         fig, axs = plt.subplots(1, imgs_to_draw, figsize=(18.5, 6))
         for i in range(imgs_to_draw):
             axs[i].imshow(np.moveaxis(x[i], 0, -1))
-            axs[i].set_title(f'True: {np.round(y[i]).item()}; Predicted: {np.round(y_hat[i]).item()}')
+            axs[i].set_title(f'True: {np.round(y[i]).item()}; Predicted: {np.round(to_preds_array(y_hat[i])).item()}')
             axs[i].set_axis_off()
     plt.show()
 
@@ -183,6 +183,11 @@ def overlay_image(image_array, mask_array):
 def to_preds(logits):
     probs = torch.sigmoid(logits)
     preds = (probs >= params.CUTOFF).float()
+    return preds
+
+def to_preds_array(logits):
+    probs = 1/(1 + np.exp(-logits))
+    preds = np.asarray(probs >= params.CUTOFF, dtype=float)
     return preds
 
 def patch_accuracy_fn(y_hat, y):
