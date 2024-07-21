@@ -82,7 +82,7 @@ class RoadTracerDistanceDataset (Dataset):
         self.patch_size = patch_size
         self.positive_samples = positive_samples
         self.transform = torchvision_transforms.Compose([
-            torchvision_transforms.RandomResizedCrop([400, 400], scale=(0.3, 1.0)),
+            torchvision_transforms.RandomResizedCrop([RESIZE, RESIZE], scale=(0.3, 1.0)),
             torchvision_transforms.RandomHorizontalFlip(),
         ]) if augmentation else None
         
@@ -103,7 +103,11 @@ class RoadTracerDistanceDataset (Dataset):
 
 
 def preprocess_images(images, masks):
-    return [RoadTracerImage(img, mask) for img, mask in zip(images, masks)]
+    resize_transform = torchvision_transforms.Resize((RESIZE, RESIZE))
+    
+    resized_images = [resize_transform(img) for img in images]
+    resized_masks = [resize_transform(mask) for mask in masks]
+    return [RoadTracerImage(img, mask) for img, mask in zip(resized_images, resized_masks)]
 
 def load_all_data(root_path, val_size):
     # Loading data

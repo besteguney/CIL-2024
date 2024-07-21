@@ -19,14 +19,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--root_path", default="ethz-cil-road-segmentation-2024", type=str, help="Path to dataset root")
 
 parser.add_argument("--roadtracer_angle_samples", default=64, type=int, help="How many angles are considered for the next roadtracer step")
-parser.add_argument("--roadtracer_patch_size", default=128, type=int, help="The size of the patch used as roadtracer input")
-parser.add_argument("--step_distance", default=10.0, type=float, help="The length of the edges in the generated graph")
-parser.add_argument("--merge_distance", default=10.0/1.3, type=float, help="The closest two points in the generated graph can be without getting merged")
+parser.add_argument("--roadtracer_patch_size", default=64, type=int, help="The size of the patch used as roadtracer input")
+parser.add_argument("--step_distance", default=16.0, type=float, help="The length of the edges in the generated graph")
+parser.add_argument("--merge_distance", default=16.0/1.2, type=float, help="The closest two points in the generated graph can be without getting merged")
 parser.add_argument("--single_angle_target", default=False, type=bool, help="Use one-hot encoding for the angle or provide a score for all of them")
 
 parser.add_argument("--batch_size", default=8, type=int, help="The batch size used when training")
 parser.add_argument("--epochs", default=10, type=int, help="The amount of epochs to train for")
-parser.add_argument("--learning_rate", default=1e-5, type=float, help="The model learning rate")
+parser.add_argument("--learning_rate", default=1e-4, type=float, help="The model learning rate")
 
 parser.add_argument("--validation_size", default=24, type=int, help="The size of the validation set (out of 144 images in the training set)")
 
