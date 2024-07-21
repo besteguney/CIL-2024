@@ -65,7 +65,7 @@ def distance(p1, p2):
 class BaseNode:
     def __init__(self):
         self.children = []
-        self.depth = None
+        self._depth = None
 
     def get_vertices(self):
         return sum([c.get_vertices() for c in self.children], start=[])
@@ -76,14 +76,18 @@ class BaseNode:
     def _compute_depth(self):
         for c in self.children:
             c._compute_depth()
-        self.depth = max([c.depth for c in self.children] + [0]) + 1
+        self._depth = max([c._depth for c in self.children] + [0]) + 1
+
+    def depth(self):
+        self._compute_depth()
+        return self._depth
     
     def prune(self):
-        if self.depth is None:
+        if self._depth is None:
             self._compute_depth()
-        has_main_branch = any(c.depth > 2 for c in self.children)
+        has_main_branch = any(c._depth > 2 for c in self.children)
         if has_main_branch:
-            self.children = [c for c in self.children if c.depth > 2]
+            self.children = [c for c in self.children if c._depth > 2]
         for c in self.children:
             c.prune()
 

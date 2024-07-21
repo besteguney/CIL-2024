@@ -98,6 +98,7 @@ def draw_line(img, p1, p2, color, thickness: int):
 def graph_training(model, metrics: "LogMetrics", image: RoadTracerImage, angle_samples, patch_size, step_size, merge_distance):
     graph = BaseNode()
     graph_layer = np.zeros([400, 400, 1], dtype=np.uint8)
+    stepi = 0
 
     for starting_point in image.road_samples:
         if graph.distance_to(starting_point) < merge_distance:
@@ -117,7 +118,7 @@ def graph_training(model, metrics: "LogMetrics", image: RoadTracerImage, angle_s
             angle_dist = angle_dist[0]
 
             # oracle output
-            angle_true = get_oracle_prediction(image, starting_point, graph, angle_samples, step_size, merge_distance)
+            angle_true = get_oracle_prediction(image, top_node.p, graph, angle_samples, step_size, merge_distance)
 
 
             # We don't want to end! 
@@ -127,35 +128,47 @@ def graph_training(model, metrics: "LogMetrics", image: RoadTracerImage, angle_s
                 angle_target[angle_label] = 1.0
                 angle_loss = torch.nn.functional.mse_loss(angle_dist, angle_target.cuda())
                 action_loss = torch.nn.functional.cross_entropy(action_dist, torch.FloatTensor([1.0, 0.0]).cuda())
-                metrics.log_metric("step_percentage", 1.0)
             else: # we want to end
                 angle_loss = 0
                 action_loss = torch.nn.functional.cross_entropy(action_dist,  torch.FloatTensor([0.0, 1.0]).cuda())
-                metrics.log_metric("stop_percentage", 0.0)
+                
             
             total_loss = 50 * angle_loss + action_loss
             yield total_loss
 
+
+            # stepi += 1
+            # if stepi % 10 == 0:
+            #     fig, (ax1, ax2) = plt.subplots(1, 2)
+            #     ax1.imshow(graph_layer)
+            #     ax2.imshow(image.target)
+            #     plt.draw()
+            #     plt.waitforbuttonpress()
+            #     plt.close()
+
+
             # either there is nothing to be generated according to the oracle, or the model wants to stop
-            if angle_true is None or action_dist[0] < action_dist[1]:
+            if angle_true is None or action_dist[0] < action_dist[1] or len(stack) > 500:
                 stack.pop()
+                metrics.log_metric("step_percentage", 0.0)
             else:
+                metrics.log_metric("step_percentage", 1.0)
                 points_sorted = get_circle_sample_points(top_node.p, angle_samples, step_size)[np.argsort(angle_dist.detach().cpu().numpy())[::-1]]
                 for p in points_sorted:
-                    if graph.distance_to(p) > merge_distance: 
+                    if graph.distance_to(p) > merge_distance and all(p >= 0) and all(p <= 400): 
                         node = Node(p)
                         top_node.children.append(node)
                         draw_line(graph_layer, top_node.p, node.p, 255, 1)
                         stack.append(node)
                         break
                 else:
-                    continue
-                stack.pop()
-    metrics.log_image("ground_truth", np.moveaxis(image.image, -1, 0))
+                    stack.pop()
+    metrics.log_image("base_image", np.moveaxis(image.image, -1, 0))
+    metrics.log_image("search_image", image.search[None])
     metrics.log_image("rendered_graph", np.moveaxis(graph_layer, -1, 0))
     vertices_render = np.zeros([400, 400, 1], np.uint8)
     for v in graph.get_vertices():
-        cv2.circle(vertices_render, (int(v[1]), int(v[0])), 3, 255, -1)
+        cv2.circle(vertices_render, (int(v[0]), int(v[1])), 3, 255, -1)
     metrics.log_image("rendered_vertices", np.moveaxis(vertices_render, -1, 0))
 
     # fig, (ax1, ax2) = plt.subplots(1, 2)

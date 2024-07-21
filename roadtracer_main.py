@@ -34,3 +34,10 @@ train_loop = roadtracer_train.GraphTrainingLoop(
     step_distance, merge_distance
 )
 train_loop.train(model, optimizer)
+
+  
+
+# TODO !
+# Use the additional loss term
+# Train on all scores (target is not one-hot)
+# Smaller batch size? orthogonal roads seem to affect the model too much when there are several batches of those

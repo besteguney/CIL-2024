@@ -24,9 +24,9 @@ class RoadTracerImage:
             self.distance, self.search = distance, search
         self.target = target
 
-        self.road_samples = np.stack(np.nonzero(self.target != 0), 1)
+        self.road_samples = np.stack(np.nonzero(self.search != 0), 1)
         self.road_samples = self.road_samples[np.argsort(self.distance[self.road_samples[..., 0], self.road_samples[..., 1]])]
-        self.negative_samples = np.stack(np.nonzero(self.target == 0), 1)
+        self.negative_samples = np.stack(np.nonzero(self.search == 0), 1)
     
 
 def linear_interpolation(img, points):
