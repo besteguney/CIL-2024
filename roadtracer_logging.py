@@ -4,6 +4,7 @@ import wandb
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import torch
+import torchvision.utils
 
 
 class MetricDict:
@@ -88,10 +89,14 @@ class Logger:
             if self.use_wandb:
                 wandb_log[prefix + name] = val
 
-        for name, val in metrics.images.get_first():
-            self.writer.add_image(prefix + name, val, step, dataformats="HWC" if len(val.shape)==3 else "HW")
+        for name, val in metrics.images.get_stacked():
+            if len(val.shape) == 3: # batch, W, H
+                val = val[..., None] # batch, W, H, 1
+            val = np.moveaxis(val, -1, 1) # batch, C, W, H
+            grid_image = torchvision.utils.make_grid(torch.from_numpy(val), nrow=3).numpy()
+            self.writer.add_image(prefix + name, grid_image, step, dataformats="CHW")
             if self.use_wandb:
-                wandb_log[prefix + name] = wandb.Image(val)
+                wandb_log[prefix + name] = wandb.Image(np.moveaxis(grid_image, 0, 2))
 
         self.writer.flush()
         if self.use_wandb:

@@ -10,6 +10,7 @@ from parameters import *
 import roadtracer_train
 import roadtracer_dataset
 from roadtracer_model1 import RoadTracerModel
+from roadtracer_logging import Logger, LogMetrics
 
 # import faulthandler
 # faulthandler.enable()
@@ -23,6 +24,7 @@ parser.add_argument("--roadtracer_patch_size", default=128, type=int, help="The 
 parser.add_argument("--step_distance", default=16.0, type=float, help="The length of the edges in the generated graph")
 parser.add_argument("--merge_distance", default=16.0/1.1, type=float, help="The closest two points in the generated graph can be without getting merged")
 parser.add_argument("--single_angle_target", default=False, type=bool, help="Use one-hot encoding for the angle or provide a score for all of them")
+parser.add_argument("--max_graph_size", default=1000, type=int, help="The largest amount of vertices allowed in a graph")
 
 parser.add_argument("--batch_size", default=8, type=int, help="The batch size used when training")
 parser.add_argument("--epochs", default=10, type=int, help="The amount of epochs to train for")
@@ -34,13 +36,7 @@ parser.add_argument("--log_name", default="roadtracer_graph", type=str, help="Th
 parser.add_argument("--wandb_entity", default="abjarnsteins-eth-z-rich", type=str, help="The name of the wandb team where the run will be logged")
 parser.add_argument("--use_wandb", default=True, type=bool, help="Whether to use wandb (weights and biases) or not")
 
-# roadtracer_angle_samples = 64
-# roadtracer_patch_size = 128
-# batch_size = 8
-# epochs = 10
-# step_distance = 10.0
-# merge_distance = step_distance / 1.3
-# learning_rate = 1e-5
+
 
 def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -50,21 +46,23 @@ def main(args):
         args.validation_size
     )
     
-    logger =  roadtracer_train.Logger(args.log_name, args.use_wandb, args.wandb_entity, vars(args))
+    logger =  Logger(args.log_name, args.use_wandb, args.wandb_entity, vars(args))
     model = RoadTracerModel(args.roadtracer_patch_size, num_angles=args.roadtracer_angle_samples).to(device)
     optimizer = torch.optim.Adam(model.parameters(), args.learning_rate)
 
     train_loop = roadtracer_train.GraphTrainingLoop(
         logger, train_images, val_images,
         args.batch_size, args.epochs, args.roadtracer_angle_samples, args.roadtracer_patch_size,
-        args.step_distance, args.merge_distance, args.single_angle_target
+        args.step_distance, args.merge_distance, args.single_angle_target, args.max_graph_size
     )
     train_loop.train(model, optimizer)
+
+
 
 if __name__ == "__main__":
     main(parser.parse_args())
   
-
 # TODO !
 # Use the additional loss term
 # Smaller batch size? orthogonal roads seem to affect the model too much when there are several batches of those
+# Terminate if action = move and probs are low
