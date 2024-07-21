@@ -1,5 +1,6 @@
 from math import pi
 from collections.abc import Iterator
+import time
 
 import numpy as np
 import torch
@@ -94,16 +95,19 @@ def draw_line(img, p1, p2, color, thickness: int):
 
 
 class GraphStepResult:
-    def __init__(self, graph_layer, loss = None):
+    def __init__(self, graph_layer, steps_done, time_since_start, loss = None):
         self.graph_layer = graph_layer
+        self.steps_done = steps_done
+        self.time_since_start = time_since_start
         self.loss = loss
 
 
 def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMetrics",
-        angle_samples, patch_size, step_size, merge_distance, run_training, oracle_image=None, angle_train_single_target_only=False, use_oracle_for_step=False) -> Iterator[GraphStepResult]:
+        angle_samples, patch_size, step_size, merge_distance, run_training, max_steps=1000, oracle_image=None, angle_train_single_target_only=False, use_oracle_for_step=False) -> Iterator[GraphStepResult]:
     graph = BaseNode()
     graph_layer = np.zeros([400, 400, 1], dtype=np.uint8)
-    stepi = 0
+    steps_done = 0
+    start_time = time.time()
 
     for starting_point in starting_positions:
         if graph.distance_to(starting_point) < merge_distance:
@@ -116,8 +120,6 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
 
         while stack:
             top_node = stack[-1]
-
-            
 
             if not use_oracle_for_step:
                 model_input = np.concatenate((get_patch(image, top_node.p, patch_size), get_patch(graph_layer/255.0, top_node.p, patch_size)), 2)
@@ -133,6 +135,7 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
                 angle_dist[idx] = 1.0
 
             teacher_force_end = False
+
 
             if run_training:
                 # oracle output
@@ -151,9 +154,13 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
                 
 
                 total_loss = 50 * angle_loss + action_loss
-                yield GraphStepResult(graph_layer, total_loss)
+                yield GraphStepResult(graph_layer, steps_done, time.time()-start_time, total_loss)
             else:
-                yield GraphStepResult(graph_layer)
+                yield GraphStepResult(graph_layer, steps_done, time.time()-start_time)
+
+            steps_done += 1
+            if steps_done >= max_steps: 
+                break
 
             # either there is nothing to be generated according to the oracle, or the model wants to stop
             if teacher_force_end or action_dist[0] < action_dist[1] or len(stack) > 500:
@@ -171,22 +178,14 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
                         break
                 else:
                     stack.pop()
+        if steps_done >= max_steps: 
+            break
 
-    # metrics.log_image("base_image", np.moveaxis(image.image, -1, 0))
-    # metrics.log_image("search_image", image.search[None])
-    # metrics.log_image("rendered_graph", np.moveaxis(graph_layer, -1, 0))
-    # vertices_render = np.zeros([400, 400, 1], np.uint8)
-    # for v in graph.get_vertices():
-    #     cv2.circle(vertices_render, (int(v[0]), int(v[1])), 3, 255, -1)
-    # metrics.log_image("rendered_vertices", np.moveaxis(vertices_render, -1, 0))
 
-    # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # ax1.imshow(graph_layer)
-    # ax2.imshow(image.image)
-    # ax2.scatter(*zip(*graph.get_vertices()))
-    # plt.draw()
-    # plt.waitforbuttonpress()
-    # plt.close()
+def blended_result(image, blend_mask):
+    if blend_mask.dtype == np.uint8:
+        blend_mask = blend_mask / 255.0
+    return image * (1.0 - blend_mask) + np.array([1.0, 0.0, 0.0]) * blend_mask
 
 
 class TrainingLoop:
@@ -232,7 +231,7 @@ class TrainingLoop:
 
 
 class GraphTrainingLoop (TrainingLoop):
-    def __init__(self, logger, train_images, val_images, batch_size, epochs, angle_samples, patch_size, step_size, merge_distance, single_angle_target):
+    def __init__(self, logger, train_images, val_images, batch_size, epochs, angle_samples, patch_size, step_size, merge_distance, single_angle_target, max_graph_size):
         super().__init__(logger, train_images, val_images, epochs, 1, "roadtracer_graph")
         self.batch_size = batch_size
         self.generate_graph_kwargs = {
@@ -240,7 +239,8 @@ class GraphTrainingLoop (TrainingLoop):
             "patch_size": patch_size,
             "step_size": step_size,
             "merge_distance": merge_distance,
-            "angle_train_single_target_only": single_angle_target
+            "angle_train_single_target_only": single_angle_target,
+            "max_steps": max_graph_size
         }
         
 
@@ -264,25 +264,29 @@ class GraphTrainingLoop (TrainingLoop):
                     batch_size = 0
                 
                 last_result = step_result
-            blended_graph_result = (image.image * (255.0 - step_result.graph_layer) + np.array([1.0, 0.0, 0.0]) * step_result.graph_layer).astype(np.uint8)
-            metrics.log_image("graph_result", blended_graph_result)
-            blended_target = (255 * image.image * (1.0 - image.search[..., None]) + np.array([255.0, 0.0, 0.0]) * image.search[..., None]).astype(np.uint8)
-            metrics.log_image("graph_target", blended_target)
-            # metrics.log_image("image", image.image)
+            if last_result is not None:
+                metrics.log_metric("graph_size", last_result.steps_done)
+                metrics.log_metric("step_duration", last_result.time_since_start)
+                metrics.log_image("graph_result", blended_result(image.image, last_result.graph_layer))
+                metrics.log_image("graph_target", blended_result(image.image, image.search[..., None]))
     
     def _eval_generator(self, model, step_description: str):
-        for image in tqdm(self.eval_images, ncols=150, desc=step_description):
+        steps_left = 3
+        for image in tqdm(self.eval_images[:steps_left], ncols=150, desc=step_description):
             metrics = LogMetrics()
-            # last_result = None
-            # for step_result in generate_roadtracer_graph(
-            #         image.image, image.road_samples, model, metrics,
-            #         **self.generate_graph_kwargs,
-            #         run_training=False):
-            #     last_result = step_result
-            # metrics.log_image("graph_result", last_result.graph_layer)
-            # metrics.log_image("graph_target", image.search)
-            # metrics.log_image("image", image.image)
+            last_result = None
+            for step_result in generate_roadtracer_graph(
+                    image.image, image.road_samples, model, metrics,
+                    **self.generate_graph_kwargs,
+                    run_training=False):
+                last_result = step_result
+            if last_result is not None:
+                metrics.log_metric("graph_size", last_result.steps_done)
+                metrics.log_metric("step_duration", last_result.time_since_start)
+                metrics.log_image("graph_result", blended_result(image.image, last_result.graph_layer))
+                metrics.log_image("graph_target", blended_result(image.image, image.search[..., None]))
             yield metrics
+            # break # only one eval step for now
 
         # TODO early stopping + save best model
         # for image in tqdm.tqdm(self.eval_images, ncols=150, desc=step_description):
