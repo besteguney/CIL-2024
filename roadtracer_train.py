@@ -158,9 +158,9 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
             # either there is nothing to be generated according to the oracle, or the model wants to stop
             if teacher_force_end or action_dist[0] < action_dist[1] or len(stack) > 500:
                 stack.pop()
-                metrics.log_metric("step_percentage", 0.0)
+                metrics.log_metric("debug/step_percentage", 0.0)
             else:
-                metrics.log_metric("step_percentage", 1.0)
+                metrics.log_metric("debug/step_percentage", 1.0)
                 points_sorted = get_circle_sample_points(top_node.p, angle_samples, step_size)[np.argsort(angle_dist.detach().cpu().numpy())[::-1]]
                 for p in points_sorted:
                     if graph.distance_to(p) > merge_distance and np.all(p >= 0) and np.all(p <= 400): 
@@ -264,10 +264,11 @@ class GraphTrainingLoop (TrainingLoop):
                     batch_size = 0
                 
                 last_result = step_result
-                
-            metrics.log_image("graph_result", step_result.graph_layer)
-            metrics.log_image("graph_target", image.search)
-            metrics.log_image("image", image.image)
+            blended_graph_result = (image.image * (255.0 - step_result.graph_layer) + np.array([1.0, 0.0, 0.0]) * step_result.graph_layer).astype(np.uint8)
+            metrics.log_image("graph_result", blended_graph_result)
+            blended_target = (255 * image.image * (1.0 - image.search[..., None]) + np.array([255.0, 0.0, 0.0]) * image.search[..., None]).astype(np.uint8)
+            metrics.log_image("graph_target", blended_target)
+            # metrics.log_image("image", image.image)
     
     def _eval_generator(self, model, step_description: str):
         for image in tqdm(self.eval_images, ncols=150, desc=step_description):
