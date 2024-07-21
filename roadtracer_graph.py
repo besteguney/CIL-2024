@@ -168,15 +168,24 @@ def find_graph(img, angle_samples, distance_samples, sample_radius):
 
 
 
-def get_oracle_prediction(image: RoadTracerImage, point, graph: BaseNode, angle_samples, step_distance, merge_distance):
-    scores, angles, pts = graph_step(image.distance, point, angle_samples, step_distance)
-    scores, angles, pts = filter_samples(scores, 4, angles, pts)
-    
-    for a, p in zip(angles, pts):
-        if graph.distance_to(p) > merge_distance:
-            # the oracle target for the network is this point
-            return a
-    return None
+def get_oracle_prediction(oracle_image, point, graph: BaseNode, angle_samples, step_distance, merge_distance, single_target_only=False):
+    scores, angles, pts = graph_step(oracle_image, point, angle_samples, step_distance)
+    if single_target_only: # only return one angle, as a numeric value
+        scores, pts, idx = filter_samples(scores, 4, pts, np.arange(angle_samples))
+        target = np.zeros(angle_samples)
+        for i, p in zip(idx, pts):
+            if graph.distance_to(p) > merge_distance:
+                # the oracle target for the network is this point
+                target[i] = 1.0
+                return target
+        return None
+    else:
+        scores = np.where(np.array([graph.distance_to(p) for p in pts]) > merge_distance, scores, 0.0)
+        if np.max(scores) > 1.0:
+            return scores / np.max(scores)
+        return None
+
+
 
 
 
