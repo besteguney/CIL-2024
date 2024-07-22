@@ -1,7 +1,7 @@
 import torch
 import parameters as params
 import segmentation_models_pytorch as smp
-import utils
+from utils import utils
 import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -105,7 +105,7 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
             # Log partial metrics
             metrics['loss'].append(loss.item())
             
-            predictions = to_preds(y_hat)
+            predictions = utils.to_preds(y_hat)
             # Calculate F1 score
             tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
             f1_score = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise").item()
@@ -133,7 +133,7 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
                     # Log partial metrics
                     metrics['val_loss'].append(loss.item())
 
-                    predictions = to_preds(y_hat)
+                    predictions = utils.to_preds(y_hat)
 
                     tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
                     f1_score = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise").item()
