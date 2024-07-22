@@ -7,8 +7,9 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
+from utils.utils import accuracy_fn, to_preds
 
-def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq):
+def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
     # training loop
     logdir = './tensorboard/net'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
@@ -39,11 +40,7 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
                 metrics[k].append(fn(y_hat, y).item())
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
 
-        if (eval_dataloader == None): 
-            continue
-
-        if (epoch % val_freq == 0) or (epoch==n_epochs):
-            # validation
+        if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
             model.eval()
             with torch.no_grad():  # do not keep track of gradients
                 for (x, y) in eval_dataloader:
@@ -60,7 +57,7 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
             for k, v in history[epoch].items():
                 writer.add_scalar(k, v, epoch)
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-            utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+            utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves
@@ -71,16 +68,16 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
     plt.legend()
     plt.show()
 
-def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq):
-    # Initialize tensorboard writer
+def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
+    # training loop
     logdir = './tensorboard/net'
-    writer = SummaryWriter(logdir)
+    writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
 
-    history = {}  # Collects metrics at the end of each epoch
-    device = next(model.parameters()).device
-    for epoch in range(n_epochs):  # Loop over the dataset multiple times
+    history = {}  # collects metrics at the end of each epoch
 
-        # Initialize metric list
+    for epoch in range(n_epochs):  # loop over the dataset multiple times
+
+        # initialize metric list
         metrics = {
             'loss': [], 'val_loss': [], 
             'f1_train': [], 'f1_val': [], 
@@ -88,100 +85,60 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
         }
         for k, _ in metric_fns.items():
             metrics[k] = []
-            metrics['val_' + k] = []
+            metrics['val_'+k] = []
 
         pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{n_epochs}')
-        
-        # Training phase
+        # training
         model.train()
         for (x, y) in pbar:
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()  # Zero out gradients
-            y_hat = model(x)  # Forward pass
+            optimizer.zero_grad()  # zero out gradients
+            y_hat = model(x)  # forward pass
             loss = loss_fn(y_hat, y)
-            loss.backward()  # Backward pass
-            optimizer.step()  # Optimize weights
+            loss.backward()  # backward pass
+            optimizer.step()  # optimize weights
 
-            # Log partial metrics
-            metrics['loss'].append(loss.item())
-            
-            predictions = utils.to_preds(y_hat)
-            # Calculate F1 score
+            metrics['loss'].append(loss.item()) 
+            predictions = to_preds(y_hat)
+            # calculate f1 score
             tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
-            f1_score = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise").item()
-            metrics['f1_train'].append(f1_score)
-            
-            # Calculate accuracy
-            correct = (predictions == y).float().sum()
-            acc = correct / y.numel()
-            metrics['acc_train'].append(acc.item())
-            
+            metrics['f1_train'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
+
             for k, fn in metric_fns.items():
                 metrics[k].append(fn(y_hat, y).item())
-            
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
+        
 
         if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
-            # Validation phase
+            # validation
             model.eval()
-            with torch.no_grad():  # Do not keep track of gradients
+            with torch.no_grad():  # do not keep track of gradients
                 for (x, y) in eval_dataloader:
-                    x, y = x.to(device), y.to(device)
-                    y_hat = model(x)  # Forward pass
+                    y_hat = model(x)  # forward pass
                     loss = loss_fn(y_hat, y)
-
-                    # Log partial metrics
                     metrics['val_loss'].append(loss.item())
-
-                    predictions = utils.to_preds(y_hat)
-
+                    
+                    predictions = to_preds(y_hat)
+                    # calculate f1 score
                     tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
-                    f1_score = smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise").item()
-                    metrics['f1_val'].append(f1_score)
-
-                    # Calculate accuracy
-                    correct = (predictions == y).float().sum()
-                    acc = correct / y.numel()
-                    metrics['acc_val'].append(acc.item())
+                    metrics['f1_val'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
 
                     for k, fn in metric_fns.items():
-                        metrics['val_' + k].append(fn(y_hat, y).item())
+                        metrics['val_'+k].append(fn(y_hat, y).item())
 
-            # Summarize metrics, log to tensorboard and display
-            history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
+            # summarize metrics, log to tensorboard and display
+            history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
             for k, v in history[epoch].items():
                 writer.add_scalar(k, v, epoch)
-            print(' '.join(['\t- ' + str(k) + ' = ' + str(v) + '\n ' for (k, v) in history[epoch].items()]))
-            utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
+            utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
-    
-    # Plot loss curves
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 3, 1)
+    # plot loss curves
     plt.plot([v['loss'] for k, v in history.items()], label='Training Loss')
     plt.plot([v['val_loss'] for k, v in history.items()], label='Validation Loss')
     plt.ylabel('Loss')
     plt.xlabel('Epochs')
     plt.legend()
-    
-    # Plot F1 score curves
-    plt.subplot(1, 3, 2)
-    plt.plot([v['f1_train'] for k, v in history.items()], label='Training F1 Score')
-    plt.plot([v['f1_val'] for k, v in history.items()], label='Validation F1 Score')
-    plt.ylabel('F1 Score')
-    plt.xlabel('Epochs')
-    plt.legend()
-
-    # Plot accuracy curves
-    plt.subplot(1, 3, 3)
-    plt.plot([v['acc_train'] for k, v in history.items()], label='Training Accuracy')
-    plt.plot([v['acc_val'] for k, v in history.items()], label='Validation Accuracy')
-    plt.ylabel('Accuracy')
-    plt.xlabel('Epochs')
-    plt.legend()
-
-    plt.tight_layout()
     plt.show()
 
 def train_pix2pix(train_dataloader, eval_dataloader, generator, discriminator, g_loss, d_loss, metric_fns, g_optimizer, d_optimizer, n_epochs):
@@ -269,7 +226,7 @@ def train_pix2pix(train_dataloader, eval_dataloader, generator, discriminator, g
         for k, v in history[epoch].items():
           writer.add_scalar(k, v, epoch)
         print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-        utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+        utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves
