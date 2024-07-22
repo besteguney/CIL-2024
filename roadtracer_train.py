@@ -163,7 +163,7 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
                 break
 
             # either there is nothing to be generated according to the oracle, or the model wants to stop
-            if teacher_force_end or action_dist[0] < action_dist[1] or len(stack) > 500:
+            if action_dist[0] < action_dist[1] or len(stack) > 500: # or teacher_force_end:
                 stack.pop()
                 metrics.log_metric("debug/step_percentage", 0.0)
             else:

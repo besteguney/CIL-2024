@@ -8,7 +8,6 @@ import torchvision.transforms.v2 as torchvision_transforms
 from roadtracer_graph import graph_step
 from roadtracer_utils import linear_interpolation
 import random
-from parameters import *
 from math import pi
 import matplotlib.pyplot as plt
 from roadtracer_utils import RoadTracerImage, get_patch
@@ -77,12 +76,12 @@ from roadtracer_utils import RoadTracerImage, get_patch
 
 
 class RoadTracerDistanceDataset (Dataset):
-    def __init__(self, images, patch_size, positive_samples=0.75, augmentation=False):
+    def __init__(self, images, patch_size, image_size, positive_samples=0.75, augmentation=False):
         self.images = images
         self.patch_size = patch_size
         self.positive_samples = positive_samples
         self.transform = torchvision_transforms.Compose([
-            torchvision_transforms.RandomResizedCrop([RESIZE, RESIZE], scale=(0.3, 1.0)),
+            torchvision_transforms.RandomResizedCrop([image_size, image_size], scale=(0.3, 1.0)),
             torchvision_transforms.RandomHorizontalFlip(),
         ]) if augmentation else None
         
@@ -102,22 +101,22 @@ class RoadTracerDistanceDataset (Dataset):
         return len(self.images)
 
 
-def preprocess_images(images, masks):
-    resize_transform = torchvision_transforms.Resize((RESIZE, RESIZE))
+def preprocess_images(images, masks, image_size):
+    resize_transform = torchvision_transforms.Resize((image_size, image_size))
     
     resized_images = [resize_transform(img) for img in images]
     resized_masks = [resize_transform(mask) for mask in masks]
     return [RoadTracerImage(img, mask) for img, mask in zip(resized_images, resized_masks)]
 
-def load_all_data(root_path, val_size):
+def load_all_data(root_path, val_size, image_size):
     # Loading data
     images = utils.load_all_from_path(os.path.join(root_path, 'training', 'images'))[:, :, :, :3]
     masks = utils.load_all_from_path(os.path.join(root_path, 'training', 'groundtruth'))
     train_images, val_images, train_masks, val_masks = train_test_split(
         images, masks, test_size=val_size, random_state=42
     )
-    train = preprocess_images(train_images, train_masks)
-    val = preprocess_images(val_images, val_masks)
+    train = preprocess_images(train_images, train_masks, image_size)
+    val = preprocess_images(val_images, val_masks, image_size)
     return train, val
 
 
