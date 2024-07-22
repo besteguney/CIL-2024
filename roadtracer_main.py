@@ -1,24 +1,28 @@
 import os
-os.environ['CUDA_ENABLE_COREDUMP_ON_EXCEPTION']='1'
+# os.environ['CUDA_ENABLE_COREDUMP_ON_EXCEPTION']='1'
+os.environ['CUDA_LAUNCH_BLOCKING']='1'
+
+
+# import faulthandler
+# faulthandler.enable()
+
 import argparse
 
 # Imports
 import torch
 import numpy as np
-from parameters import *
 
 import roadtracer_train
 import roadtracer_dataset
 from roadtracer_model1 import RoadTracerModel
 from roadtracer_logging import Logger, LogMetrics
 
-# import faulthandler
-# faulthandler.enable()
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--root_path", default="ethz-cil-road-segmentation-2024", type=str, help="Path to dataset root")
 
+parser.add_argument("--image_size", default=256, type=int, help="The size to which we resize data before training the model")
 parser.add_argument("--roadtracer_angle_samples", default=64, type=int, help="How many angles are considered for the next roadtracer step")
 parser.add_argument("--roadtracer_patch_size", default=64, type=int, help="The size of the patch used as roadtracer input")
 parser.add_argument("--step_distance", default=16.0, type=float, help="The length of the edges in the generated graph")
@@ -43,7 +47,8 @@ def main(args):
 
     train_images, val_images = roadtracer_dataset.load_all_data(
         args.root_path,
-        args.validation_size
+        args.validation_size,
+        args.image_size
     )
     
     logger =  Logger(args.log_name, args.use_wandb, args.wandb_entity, vars(args))
