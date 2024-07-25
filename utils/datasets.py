@@ -22,8 +22,18 @@ class ImageDataset(torch.utils.data.Dataset):
         if self.use_patches:  # split each image into patches
             self.x, self.y = image_to_patches(self.x, self.y)
         elif self.resize_to != (self.x.shape[1], self.x.shape[2]):  # resize images
-            self.x = np.stack([cv2.resize(img, dsize=self.resize_to) for img in self.x], 0)
-            self.y = np.stack([cv2.resize(mask, dsize=self.resize_to) for mask in self.y], 0)
+            new_size = (resize_to[0], resize_to[1], 3)
+            # preallocate arrays to not resize
+            self.x = np.empty((len(images), *new_size), dtype=np.float32)
+            self.y = np.empty((len(masks), *resize_to), dtype=np.float32)
+
+            for i in range(len(images)):
+                self.x[i] = cv2.resize(images[i], dsize=self.resize_to, interpolation=cv2.INTER_LINEAR)
+                self.y[i] = cv2.resize(masks[i], dsize=self.resize_to, interpolation=cv2.INTER_LINEAR)
+
+            # self.x = np.stack([cv2.resize(img, dsize=self.resize_to) for img in self.x], 0)
+            # self.y = np.stack([cv2.resize(mask, dsize=self.resize_to) for mask in self.y], 0)
+
         self.x = np.moveaxis(self.x, -1, 1)  # pytorch works with CHW format instead of HWC
         self.n_samples = len(self.x)
 
