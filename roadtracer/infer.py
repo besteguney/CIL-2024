@@ -98,7 +98,10 @@ def get_model():
 	model.BATCH_SIZE = 1
 	m = model.Model(5)
 	session = tf.Session()
-	m.saver.restore(session, str(Path(__file__).parent / "model" / "model"))
+	try:
+		m.saver.restore(session, str(Path(__file__).parent / "model" / "model"))
+	except:
+		raise Exception(f"download the model from https://roadmaps.csail.mit.edu/roadtracer/model.zip and put it in {str(Path(__file__).parent)}")
 	return (m, session)
 
 def roadtracer_infer(m, session, img, starting_locs):
@@ -204,22 +207,15 @@ def roadtracer_infer(m, session, img, starting_locs):
             paths[path_idx].push(extension_vertices[i], x, SEGMENT_LENGTH, training=False, branch_threshold=0.01, follow_threshold=0.01)
 
 
-    graph_image = np.zeros(img.shape)
+    graph_image = np.zeros((400, 400))
 
     origin = geom.Point(-200,-200)
-
-    def point_in_image(point):
-        return point.x >= 0 and point.x < 400 and point.y >= 0 and point.y < 400
 
     for edge in paths[0].graph.edges:
         start = edge.src.point.sub(origin)
         end = edge.dst.point.sub(origin)
         for p in geom.draw_line(start, end, geom.Point(400, 400)):
-            graph_image[p.x, p.y] = np.array([0.0, 1.0, 0.0])
-        if point_in_image(start):
-            graph_image[start.x, start.y] = np.array([1.0, 0.0, 0.0])
-        if point_in_image(end):
-            graph_image[end.x, end.y] = np.array([1.0, 0.0, 0.0])
+            graph_image[p.x, p.y] = 1.0
 
     return graph_image
 
