@@ -1,10 +1,7 @@
 import numpy as np
 import torch
 import cv2
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
 from .utils import image_to_patches
-import matplotlib.pyplot as plt
 
 def np_to_tensor(x, device):
     # allocates tensors from np.arrays
