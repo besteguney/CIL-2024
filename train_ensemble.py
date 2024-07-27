@@ -61,10 +61,10 @@ def load_scraped_images(location_id):
         masks.append(np.array(mask).astype(np.float32) / 255.0)
     return images, masks
 
-def load_extra_data():
+def load_extra_data(n_locs):
     all_images = []
     all_masks = []
-    for i in range(24):
+    for i in range(n_locs):
         print("Collecting data from location " + str(i))
         images, masks = load_scraped_images(i)
 
@@ -72,11 +72,11 @@ def load_extra_data():
         all_masks.extend(masks)
     return all_images, all_masks
 
-def get_data():
+def get_data(n_locs):
     images_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'images'), False)
     masks_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'groundtruth'), True)
 
-    images_extra, masks_extra = load_extra_data()
+    images_extra, masks_extra = load_extra_data(n_locs)
 
     images_list.extend(images_extra)
     masks_list.extend(masks_extra)
@@ -102,12 +102,12 @@ def main(encoder):
 
     print(f"Training Unet using encoder: " + args.encoder)
 
-    images, masks = get_data()
+    images, masks = get_data(args.n_locs)
 
     print("Finished data collection.")
 
     train_images, val_images, train_masks, val_masks = train_test_split(
-    images, masks, test_size=0.1, random_state=42, shuffle=True
+    images, masks, test_size=0.1, shuffle=True
     )
 
 
@@ -132,7 +132,7 @@ def main(encoder):
     save_name = get_unique_name(exp_name, params.SAVED_MODELS_PATH)
 
     wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
-    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 50, 1, wandb_run)
+    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, 1, wandb_run)
     torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
 
 
@@ -141,5 +141,6 @@ if __name__ == "__main__":
     parser.add_argument("--architecture", type=str, default="Unet")
     parser.add_argument("--encoder", type=str, default=None)
     parser.add_argument("--size", type=int, default=384)
+    parser.add_argument("--n_locs", type=int, default=24) # number of locations to use in the dataset
     args = parser.parse_args()
     main(args)
