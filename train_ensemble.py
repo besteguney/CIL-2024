@@ -107,18 +107,16 @@ def main(encoder):
     print("Finished data collection.")
 
     train_images, val_images, train_masks, val_masks = train_test_split(
-    images, masks, test_size=0.1, shuffle=True
+    images, masks, test_size=0.1, random_state=42, shuffle=True
     )
 
 
     # reshape the image to simplify the handling of skip connections and maxpooling
     train_dataset = ImageDataset(train_images, train_masks, device, use_patches=False, resize_to=(args.size, args.size))
     val_dataset = ImageDataset(val_images, val_masks, device, use_patches=False, resize_to=(args.size, args.size))
-    full_dataset = ImageDataset(images, masks, device, use_patches=False, resize_to=(args.size, args.size))
 
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=params.BATCH_SIZE, shuffle=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=params.BATCH_SIZE, shuffle=True)
-    full_dataloader = torch.utils.data.DataLoader(full_dataset, batch_size=params.BATCH_SIZE, shuffle=True)
 
     model = model_init(args.encoder, args.architecture)
     
@@ -132,7 +130,7 @@ def main(encoder):
     save_name = get_unique_name(exp_name, params.SAVED_MODELS_PATH)
 
     wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
-    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, 1, wandb_run)
+    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, 1, wandb_run, save_name)
     torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
 
 
