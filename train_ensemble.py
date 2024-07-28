@@ -17,7 +17,6 @@ from utils.losses import DiceBCELoss
 import random
 import segmentation_models_pytorch as smp
 import argparse
-import sys
 import wandb
 from utils.utils import load_all_from_path, patch_accuracy_fn, accuracy_fn
 from infer_ensemble import model_init, get_unique_name, generate_filename
@@ -121,7 +120,8 @@ def main(encoder):
     model = model_init(args.encoder, args.architecture)
     
     model = model.to(device)
-    loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+    #loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+    loss_fn = DiceBCELoss()
     metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn}
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
@@ -130,8 +130,8 @@ def main(encoder):
     save_name = get_unique_name(exp_name, params.SAVED_MODELS_PATH)
 
     wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
-    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, 1, wandb_run, save_name)
-    torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
+    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, save_name, 1, wandb_run)
+    #torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
 
 
 if __name__ == "__main__":

@@ -15,7 +15,6 @@ def get_unique_name(base, directory):
     extension = '.pth'
     counter = 1
     filename = f"{base}_{counter}{extension}"
-    print(os.path.join(directory,filename))
     while os.path.isfile(os.path.join(directory,filename)):
         filename = f"{base}_{counter}{extension}"
         counter += 1

@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
 from utils.utils import accuracy_fn, to_preds
-from segmentation_models_pytorch import utils as smp_utils
+import os
 from torchmetrics import F1Score
 
 def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
@@ -144,9 +144,11 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
     plt.show()
 
 
-def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10, wandb_run=None):
+def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, save_name, val_freq=10, wandb_run=None):
     history = {}  # collects metrics at the end of each epoch
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
+    best_val_f1 = 0.0  # Initialize the best validation F1 score
+
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         # initialize metric list
@@ -201,7 +203,13 @@ def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fn
             if wandb_run:
                 wandb_run.log(history[epoch], step=epoch)
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-            #utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+
+            # Check if the current validation F1 score is the best so far
+            current_val_f1 = history[epoch]['f1_val']
+            if current_val_f1 > best_val_f1:
+                best_val_f1 = current_val_f1
+                torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
+                print(f'New best validation F1 score: {best_val_f1}. Model saved.')
 
     print('Finished Training')
 
