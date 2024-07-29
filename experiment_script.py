@@ -97,7 +97,7 @@ def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fn
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': history[epoch]["loss"],
                     'wandb_id': wandb.run.id,
-                }, f"{save_location}/checkpoints.pt")
+                }, f"{save_location}/checkpoints.pth")
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
 
     wandb_run.finish()
