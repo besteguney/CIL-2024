@@ -208,6 +208,31 @@ def f1_fn(y_hat, y):
     tp, fp, fn, tn = smp.metrics.get_stats(preds.long(), y.long(), mode="binary")
     return smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise")
 
+def patch_f1_fn(y_hat, y):
+    # Computes F1 score weighted by patches using params.PATCH_SIZE and params.CUTOFF
+    h_patches = y.shape[-2] // params.PATCH_SIZE
+    w_patches = y.shape[-1] // params.PATCH_SIZE
+
+    y_hat = torch.sigmoid(y_hat)
+    patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
+    patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
+
+    # Flatten patches to compute precision, recall, and F1 score
+    patches_hat = patches_hat.view(-1)
+    patches = patches.view(-1)
+
+    tp = (patches_hat & patches).float().sum()
+    fp = (patches_hat & ~patches).float().sum()
+    fn = (~patches_hat & patches).float().sum()
+
+    precision = tp / (tp + fp + 1e-8)
+    recall = tp / (tp + fn + 1e-8)
+
+    f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
+
+    return f1
+
+
 def ensemble_predict(models, weights, test_images):
     if len(models) != len(weights):
         raise ValueError("Number of models and weights must be the same")

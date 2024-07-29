@@ -18,7 +18,7 @@ import segmentation_models_pytorch as smp
 
 from models import load_config, model_from_config, loss_fn_from_config
 from utils.datasets import ImageDataset
-from utils.utils import load_all_from_path, patch_accuracy_fn, accuracy_fn, to_preds
+from utils.utils import load_all_from_path, patch_accuracy_fn, accuracy_fn, to_preds, patch_f1_fn
 import parameters as params
 
 RANDOM_STATES = [17,89,79]
@@ -154,10 +154,10 @@ def main(args):
         loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
         optimizer_graph = torch.optim.Adam(model_graph.parameters(), lr=1e-4)
 
-        metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn}
+        metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn, 'patch_f1': patch_f1_fn}
 
         wandb.init(
-            name=f"{RANDOM_STATES[i]} {"with garph" if args.graph else "without graph"}",
+            name = f"{RANDOM_STATES[i]}{'with_graph' if args.graph else 'without_graph'}",
             project="CIL-experiments",
             config={
                 "learning_rate": LR,
