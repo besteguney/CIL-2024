@@ -97,7 +97,7 @@ def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fn
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': history[epoch]["loss"],
                     'wandb_id': wandb.run.id,
-                }, f"checkpoints/{save_location}/checkpoints.pt")
+                }, f"{save_location}/checkpoints.pt")
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
 
     wandb_run.finish()
@@ -138,7 +138,7 @@ def main(args):
         val_dl = torch.utils.data.DataLoader(val_ds, batch_size=4, shuffle=True)
 
         if args.model == 'resunet':
-            model_graph = smp.ResUnet(
+            model = smp.ResUnet(
                 encoder_name=args.encoder,
                 encoder_depth=5,
                 encoder_weights='imagenet',
@@ -146,43 +146,53 @@ def main(args):
                 in_channels=train_images.shape[-1],
                 classes=1,
             ).to(DEVICE)
+        elif args.model == 'efficient':
+            model = smp.EfficientUnetPlusPlus(
+                encoder_name=args.encoder,
+                encoder_depth=5,
+                encoder_weights='imagenet',
+                decoder_channels=(256, 128, 64, 32, 16),
+                in_channels=train_images.shape[-1],
+                classes=1
+            ).to(DEVICE)
         else:
             raise Exception(f'not supported model argument: {args.model}')
 
 
         loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-        optimizer_graph = torch.optim.Adam(model_graph.parameters(), lr=1e-4)
+        optimizer_graph = torch.optim.Adam(model.parameters(), lr=1e-4)
 
         metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn, 'patch_f1': patch_f1_fn}
 
         wandb_run = wandb.init(
-            name = f"{RANDOM_STATES[i]} {'with_graph' if args.graph else 'without_graph'}",
+            name = f"{RANDOM_STATES[i]}_{'graph' if args.graph else 'base'}_{args.model}_{args.encoder}",
             project="CIL-experiments",
             config={
                 "learning_rate": LR,
                 "epochs": EPOCHS,
                 "n_training_examples": len(train_ds),
                 "n_validation_examples": len(val_ds), 
-                "parameter_count": sum([p.numel() for p in model_graph.parameters() if p.requires_grad]),
+                "parameter_count": sum([p.numel() for p in model.parameters() if p.requires_grad]),
             },
             group=f'{args.model} {args.encoder}'
         )
 
         print(f"Training on device: {DEVICE} with random state {RANDOM_STATES[i]}")
 
-        # save_folder = f'checkpoints/{args.model}_{args.encoder}_{RANDOM_STATES[i]}_{args.graph}/'
-        # os.mkdir(save_folder)
+        save_folder = f'checkpoints/{wandb_run.name}/'
+        os.mkdir(save_folder)
 
         train_smp_wandb(
             train_dataloader=train_dl,
             eval_dataloader=val_dl,
-            model=model_graph,
+            model=model,
             loss_fn=loss_fn,
             metric_fns=metric_fns,
             optimizer=optimizer_graph,
             n_epochs=EPOCHS,
             val_freq=1,
             wandb_run=wandb_run,
+            save_location=save_folder
         )
 
 
