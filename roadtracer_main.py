@@ -24,9 +24,9 @@ parser.add_argument("--root_path", default="ethz-cil-road-segmentation-2024", ty
 
 parser.add_argument("--image_size", default=256, type=int, help="The size to which we resize data before training the model")
 parser.add_argument("--roadtracer_angle_samples", default=64, type=int, help="How many angles are considered for the next roadtracer step")
-parser.add_argument("--roadtracer_patch_size", default=64, type=int, help="The size of the patch used as roadtracer input")
+parser.add_argument("--roadtracer_patch_size", default=128, type=int, help="The size of the patch used as roadtracer input")
 parser.add_argument("--step_distance", default=16.0, type=float, help="The length of the edges in the generated graph")
-parser.add_argument("--merge_distance", default=16.0/1.2, type=float, help="The closest two points in the generated graph can be without getting merged")
+parser.add_argument("--merge_distance", default=16.0/1.1, type=float, help="The closest two points in the generated graph can be without getting merged")
 parser.add_argument("--single_angle_target", default=False, type=bool, help="Use one-hot encoding for the angle or provide a score for all of them")
 parser.add_argument("--max_graph_size", default=1000, type=int, help="The largest amount of vertices allowed in a graph")
 
