@@ -1,12 +1,16 @@
 import numpy as np
 import cv2
 import scipy.ndimage
-from math import pi
+from math import pi, sin, cos
+import torch
 
-
+def from_pytorch_img(img):
+    return np.moveaxis(img.numpy(), -3, -1)
 
 def to_pytorch_img(img):
-    return np.moveaxis(img, -1, 0)
+    if len(img.shape) != 2:
+        img = np.moveaxis(img, -1, -3)
+    return torch.from_numpy(img).float()
 
 def get_search_image(image):
     dist_image = cv2.distanceTransform(image, 2, 3)
@@ -55,14 +59,22 @@ def get_circle_sample_points(center, angle_samples, sample_radius, dist_samples 
     angles = angle_sample_points(angle_samples)
     directions = np.stack((np.cos(angles), np.sin(angles)), 1)  #shape [angles, 2]
     if dist_samples is None:
+        if center.ndim == 2:
+            center = center[:, None]
         return center + np.array([[sample_radius]]) * directions
 
     distances = np.linspace(sample_radius, 0, dist_samples, endpoint=False, dtype=np.float32)
     return center + directions[np.newaxis] * distances[:, np.newaxis, np.newaxis]
 
 
-def get_patch(image, point, patch_size):
+def get_patch(image, point, patch_size, rotation=None):
     step = (patch_size-1)/2
     coords = np.linspace(-step, step, patch_size)
-    grid = np.stack(np.meshgrid(coords+point[0], coords+point[1]), 2)
+    grid = np.stack(np.meshgrid(coords, coords), 2)   # size [patch_size, patch_size, 2]
+    if rotation is not None and rotation != 0:
+        grid = grid @ np.array([[cos(rotation), -sin(rotation)], [sin(rotation), cos(rotation)]])
+    if point.ndim == 1:
+        grid = grid + point
+    else:
+        grid = np.moveaxis(grid[..., None, :] + point, -2, 0)
     return linear_interpolation(image, grid)

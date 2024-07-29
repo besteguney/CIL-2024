@@ -41,7 +41,7 @@ class RoadTracerModel(nn.Module):
         layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=KERNEL_SIZE, stride=stride, padding=KERNEL_SIZE//2))
         layers.append(nn.BatchNorm2d(out_channels))
         if activation == 'relu':
-            layers.append(nn.ReLU(inplace=True))
+            layers.append(nn.ReLU())
         elif activation == 'sigmoid':
             layers.append(nn.Sigmoid())
         return nn.Sequential(*layers)
@@ -68,7 +68,7 @@ class RoadTracerModel(nn.Module):
         detect_outputs = self.detect_pre_outputs(x)  # shape: [BATCH_SIZE, 1, IMG_SIZE, IMG_SIZE]
 
         # flatten the output for FC layers
-        x_flat = layer8_out.view(x.size(0), -1)
+        x_flat = layer8_out.reshape(x.size(0), -1)
 
         action_outputs = self.fc_action(x_flat)  # shape: [BATCH_SIZE, 2]
         angle_outputs = torch.sigmoid(self.fc_angle(x_flat))  # shape: [BATCH_SIZE, num_angles]

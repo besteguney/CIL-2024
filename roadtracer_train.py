@@ -11,9 +11,9 @@ from tqdm import tqdm
 
 import utils
 from roadtracer_graph import BaseNode, Node, RoadTracerImage, get_oracle_prediction, filter_samples
-from roadtracer_utils import get_circle_sample_points, get_patch, to_pytorch_img
+from roadtracer_utils import get_circle_sample_points, get_patch, to_pytorch_img, angle_sample_points
 from roadtracer_logging import Logger, LogMetrics
-
+from roadtracer_dataset import RoadTracerImmediateDataset, create_dataloader
 
 def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs):
     # training loop
@@ -123,7 +123,7 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
 
             if not use_oracle_for_step:
                 model_input = np.concatenate((get_patch(image, top_node.p, patch_size), get_patch(graph_layer/255.0, top_node.p, patch_size)), 2)
-                action_dist, angle_dist, _ = model(utils.np_to_tensor(to_pytorch_img(model_input)[None], "cuda").float())
+                action_dist, angle_dist, _ = model(to_pytorch_img(model_input)[None].to("cuda"))
                 action_dist = action_dist[0]
                 angle_dist = angle_dist[0]
             else:
@@ -149,7 +149,7 @@ def generate_roadtracer_graph(image, starting_positions, model, metrics: "LogMet
                     action_loss = torch.nn.functional.cross_entropy(action_dist, torch.FloatTensor([1.0, 0.0]).cuda())
                 else: # we want to end
                     angle_loss = 0
-                    action_loss = torch.nn.functional.cross_entropy(action_dist,  torch.FloatTensor([0.0, 1.0]).cuda())
+                    action_loss = torch.nn.functional.cross_entropy(action_dist, torch.FloatTensor([0.0, 1.0]).cuda())
                     teacher_force_end = True
                 
 
@@ -189,7 +189,7 @@ def blended_result(image, blend_mask):
 
 
 class TrainingLoop:
-    def __init__(self, logger, train_images: list[RoadTracerImage], eval_images: list[RoadTracerImage], epochs: int, save_freq: int, name: str="run"):
+    def __init__(self, logger: Logger, train_images: list[RoadTracerImage], eval_images: list[RoadTracerImage], epochs: int, save_freq: int, name: str="run"):
         self.train_images = train_images
         self.eval_images = eval_images
         self.epochs = epochs
@@ -198,34 +198,44 @@ class TrainingLoop:
         self.logger = logger
 
     def train(self, model, optimizer):
+        best_val_loss = np.inf
+
         batches_done = 0
         # training loop
         for epoch in range(self.epochs):  # loop over the dataset multiple times
             model.train()
-            for loss, metrics in self._train_generator(model, f"Epoch {epoch+1}/{self.epochs}"):
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            for loss, metrics in self._train_generator(model, f"Epoch {epoch+1}/{self.epochs}", epoch):
+                if loss is not None:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
 
-                metrics.log_metric("loss", loss.item())
+                    metrics.log_metric("loss", loss.item())
                 self.logger.log_metrics(metrics, batches_done)
                 batches_done += 1
                 first = False
             
             model.eval()
             val_metrics = LogMetrics()
-            for metrics in self._eval_generator(model, "Validation"):
+            for metrics in self._eval_generator(model, "Validation", epoch):
                 val_metrics.log_metrics(metrics)
             
+            cur_loss_list = val_metrics.get_metric("loss")
+            if cur_loss_list is not None:
+                loss = np.mean(cur_loss_list)
+                if loss < best_val_loss:
+                    best_val_loss = loss
+                    self.logger.save_model(model, name="best")
+                
             self.logger.log_metrics(val_metrics, batches_done, "val_")
             
             if (epoch+1) % self.save_freq == 0:
                 self.logger.save_model(model, epoch)
 
-    def _train_generator(self, model, step_description: str) -> Iterator[torch.Tensor, LogMetrics]:
+    def _train_generator(self, model, step_description: str, step: int) -> Iterator[torch.Tensor, LogMetrics]:
         raise NotImplementedError()
 
-    def _eval_generator(self, model, step_description: str) -> Iterator[torch.Tensor, LogMetrics]:
+    def _eval_generator(self, model, step_description: str, step: int) -> Iterator[torch.Tensor, LogMetrics]:
         raise NotImplementedError()
 
 
@@ -244,7 +254,7 @@ class GraphTrainingLoop (TrainingLoop):
         }
         
 
-    def _train_generator(self, model, step_description: str):
+    def _train_generator(self, model, step_description: str, step: int):
         metrics = LogMetrics()
         for image in tqdm(self.train_images, ncols=150, desc=step_description):
             total_loss, batch_size = 0.0, 0
@@ -270,7 +280,7 @@ class GraphTrainingLoop (TrainingLoop):
                 metrics.log_image("graph_result", blended_result(image.image, last_result.graph_layer))
                 metrics.log_image("graph_target", blended_result(image.image, image.search[..., None]))
     
-    def _eval_generator(self, model, step_description: str):
+    def _eval_generator(self, model, step_description: str, step: int):
         steps_left = 3
         for image in tqdm(self.eval_images[:steps_left], ncols=150, desc=step_description):
             metrics = LogMetrics()
@@ -293,7 +303,91 @@ class GraphTrainingLoop (TrainingLoop):
         #     continue
 
 
+class ImmediateTrainingLoop (TrainingLoop):
+    def __init__(self, logger, train_images, val_images, batch_size, epochs, angle_samples, patch_size, image_size, step_size, single_angle_target):
+        super().__init__(logger, train_images, val_images, epochs, save_freq=100, name="roadtracer_immediate")
+        
+        self.train_dataset = create_dataloader(
+            RoadTracerImmediateDataset(train_images, patch_size, image_size, angle_samples, step_size, augmentation=False),
+            batch_size
+        )
+        self.val_dataset = create_dataloader(
+            RoadTracerImmediateDataset(val_images, patch_size, image_size, angle_samples, step_size, augmentation=False),
+            batch_size
+        )
+        self.val_images = val_images
+        self.patch_size = patch_size
+        self.angle_samples = angle_samples
+        self.sample_radius = step_size
+    
 
+    def _train_generator(self, model, step_description: str, step: int):
+        metrics = LogMetrics()
+        for images, angle_targets in tqdm(self.train_dataset, ncols=150, desc=step_description):
+            loss = self._run_step(model, images, angle_targets, metrics)
+            yield loss, LogMetrics()
+        yield None, metrics
+
+    def _eval_generator(self, model, step_description: str, step: int):
+        for images, angle_targets in tqdm(self.val_dataset, ncols=150, desc=step_description):
+            metrics = LogMetrics()
+            loss = self._run_step(model, images, angle_targets, metrics)
+            metrics.log_metric("loss", loss.item())
+            yield metrics
+        
+        if (step + 1) % 200 != 0:
+            return
+
+        with torch.no_grad():
+            batch_size = 8
+            samples = 32
+            for image in tqdm(self.val_images):
+                positions = np.linspace(0, 400, samples)
+                coords = np.stack(np.meshgrid(positions, positions), 2)
+                coords = np.reshape(coords, [-1, batch_size, 2])
+                render_image = (image.image * 255).astype(np.uint8)
+                for coord_batch in coords:
+                    input_patches = to_pytorch_img(get_patch(image.image, coord_batch, self.patch_size))
+                    model_actions, model_angles, _ = model(input_patches.cuda())
+                    model_actions = model_actions.detach().cpu().numpy()
+                    model_angles = model_angles.detach().cpu().numpy()
+                    all_pts = get_circle_sample_points(coord_batch, self.angle_samples, self.sample_radius)
+
+                    for patch_coord, action, angles, sample_points in zip(coord_batch, model_actions, model_angles, all_pts):
+                        action = np.argmax(action)
+                        cv2.circle(render_image, (int(patch_coord[1]), int(patch_coord[0])), 5, (255, 0, 0) if action == 0 else (0, 255, 0))
+                        if action == 1:
+                            for end_pt in sample_points[np.argsort(angles)][::-1][:5]:
+                                cv2.line(render_image,
+                                    (int(patch_coord[1]), int(patch_coord[0])),
+                                    (int(end_pt[1]), int(end_pt[0])),
+                                    (255, 0, 0)
+                                )
+                metrics.log_image("grid_result", render_image)
+        yield metrics
+
+    def _run_step(self, model, image_batch, angle_targets, metrics):
+        pred_actions, pred_angles, _ = model(image_batch.cuda().float())
+
+        true_angles = angle_targets.cuda()
+        max_angle_score, _ = true_angles.max(dim=1) # size [batch]
+        perform_action_mask = max_angle_score > 1
+        true_actions = torch.where(perform_action_mask[:, None], torch.tensor([0.0, 1.0], device="cuda"), torch.tensor([1.0, 0.0], device="cuda"))
+        
+        action_count = perform_action_mask.sum()
+        if action_count != 0:
+            angle_loss = 50*torch.where(perform_action_mask, torch.square(pred_angles - true_angles / (max_angle_score[:, None]+1e-5)).mean(dim=1), 0.0).sum() / action_count
+            metrics.log_metric("angle_loss", angle_loss.item())
+        else:
+            angle_loss = 0.0
+        action_loss = torch.nn.functional.cross_entropy(pred_actions, true_actions)
+        metrics.log_metric("action_loss", action_loss.item())
+        metrics.log_metric("debug/target_action_rate", (torch.mean(torch.argmax(pred_actions, dim=1).float())).item())
+        metrics.log_metric("debug/pred_action_rate", (action_count / image_batch.shape[0]).item())
+
+        total_loss = action_loss + angle_loss
+
+        return total_loss
 
 
 class DistanceTrainingLoop (TrainingLoop):

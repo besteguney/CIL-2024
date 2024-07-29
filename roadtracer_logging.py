@@ -65,6 +65,11 @@ class LogMetrics:
         self.metrics.reset()
         self.images.reset() 
 
+    def get_metric(self, name: str):
+        if name in self.metrics:
+            return self.metrics[name]
+        return None
+
 
 
 
@@ -103,8 +108,9 @@ class Logger:
             wandb.log(wandb_log, step=step)
 
 
-    def save_model(self, model, epoch):
-        model_fname = f"{self.log_dir}/model_{epoch:0>3d}.pt"
+    def save_model(self, model, epoch=None, name=None):
+        name = name if name is not None else f"{epoch:0>3d}"
+        model_fname = f"{self.log_dir}/model_{name}.pt"
         torch.save(model.state_dict(), model_fname)
         if self.use_wandb:
             artifact = wandb.Artifact("model", type="model")
