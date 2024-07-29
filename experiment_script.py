@@ -34,6 +34,7 @@ def get_extra_data(folders):
 
 def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10, wandb_run=None, save_location=None):
     min_loss = float('inf')
+    save_dict = {}
     history = {}  # collects metrics at the end of each epoch
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
     for epoch in range(n_epochs):  # loop over the dataset multiple times
@@ -91,15 +92,17 @@ def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fn
                 wandb_run.log(history[epoch], step=epoch)
             if save_location and history[epoch]['val_loss'] < min_loss:
                 min_loss = history[epoch]['val_loss']
-                torch.save({
+                save_dict = {
                     'epoch': epoch + 1,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': history[epoch]["loss"],
                     'wandb_id': wandb.run.id,
-                }, f"{save_location}/checkpoints.pth")
+                }
+
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
 
+    torch.save(save_dict, f"{save_location}/checkpoints.pth")
     wandb_run.finish()
     print('Finished Training')
 
