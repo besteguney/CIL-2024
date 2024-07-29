@@ -100,12 +100,11 @@ def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fn
                 }, f"checkpoints/{save_location}/checkpoints.pt")
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
 
+    wandb_run.finish()
     print('Finished Training')
 
 def main(args):
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
-    print(f"Training on device: {DEVICE}")
 
     images = load_all_from_path(params.ROOT_PATH + '/training/images')[:, :, :, :3]
     masks = load_all_from_path(params.ROOT_PATH + '/training/groundtruth')
@@ -156,8 +155,8 @@ def main(args):
 
         metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn, 'patch_f1': patch_f1_fn}
 
-        wandb.init(
-            name = f"{RANDOM_STATES[i]}{'with_graph' if args.graph else 'without_graph'}",
+        wandb_run = wandb.init(
+            name = f"{RANDOM_STATES[i]} {'with_graph' if args.graph else 'without_graph'}",
             project="CIL-experiments",
             config={
                 "learning_rate": LR,
@@ -169,6 +168,7 @@ def main(args):
             group=f'{args.model} {args.encoder}'
         )
 
+        print(f"Training on device: {DEVICE} with random state {RANDOM_STATES[i]}")
 
         # save_folder = f'checkpoints/{args.model}_{args.encoder}_{RANDOM_STATES[i]}_{args.graph}/'
         # os.mkdir(save_folder)
@@ -182,7 +182,7 @@ def main(args):
             optimizer=optimizer_graph,
             n_epochs=EPOCHS,
             val_freq=1,
-            wandb_run=wandb,
+            wandb_run=wandb_run,
         )
 
 
