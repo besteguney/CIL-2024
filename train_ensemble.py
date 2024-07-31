@@ -2,6 +2,7 @@ import os
 import re
 import cv2
 import torch
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
 import parameters as params
 from utils import utils
@@ -18,7 +19,7 @@ import random
 import segmentation_models_pytorch as smp
 import argparse
 import wandb
-from utils.utils import load_all_from_path, patch_accuracy_fn, accuracy_fn
+from utils.utils import load_all_from_path, patch_accuracy_fn, accuracy_fn, patch_f1_fn
 from infer_ensemble import model_init, get_unique_name, generate_filename
 
 
@@ -34,6 +35,30 @@ def load_images(image_folder_path, is_label = False):
             img = img.convert('RGB')
         images.append(np.array(img).astype(np.float32) / 255.0)
     return images
+
+
+def load_location_images(location_id):
+    data_path = "C:\\Users\\3mmyz\\Documents\\cil_data"
+    folder = str(location_id) + '_ZOOM_18'
+    image_folder_path = os.path.join(data_path, folder)
+
+    images = []
+    masks = []
+
+    files = os.listdir(image_folder_path)
+    total_samples = int(len(files) / 2)
+    for i in range(total_samples):
+        img_path = os.path.join(image_folder_path, str(i+1) + '.png')
+        mask_path = os.path.join(image_folder_path, str(i+1) + '_label.png')
+        img = Image.open(img_path)
+        img = img.convert('RGB')
+        
+        mask = Image.open(mask_path)
+        mask = mask.convert('L')
+
+        images.append(np.array(img).astype(np.float32) / 255.0)
+        masks.append(np.array(mask).astype(np.float32) / 255.0)
+    return images, masks
 
 def load_scraped_images(location_id):
     data_path = "C:\\Users\\3mmyz\\Documents\\cil_data"
@@ -60,10 +85,10 @@ def load_scraped_images(location_id):
         masks.append(np.array(mask).astype(np.float32) / 255.0)
     return images, masks
 
-def load_extra_data(n_locs):
+def load_extra_data(start, end):
     all_images = []
     all_masks = []
-    for i in range(n_locs):
+    for i in range(start, end):
         print("Collecting data from location " + str(i))
         images, masks = load_scraped_images(i)
 
@@ -71,11 +96,16 @@ def load_extra_data(n_locs):
         all_masks.extend(masks)
     return all_images, all_masks
 
-def get_data(n_locs):
+def get_data(args):
     images_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'images'), False)
     masks_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'groundtruth'), True)
 
-    images_extra, masks_extra = load_extra_data(n_locs)
+    start = 0
+    end = 24
+    if args.model_filename:
+        start = 24
+        end = 25
+    images_extra, masks_extra = load_extra_data(start, end)
 
     images_list.extend(images_extra)
     masks_list.extend(masks_extra)
@@ -96,19 +126,18 @@ def get_data(n_locs):
     return images, masks
 
 
-def main(encoder):
+def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print(f"Training Unet using encoder: " + args.encoder)
 
-    images, masks = get_data(args.n_locs)
+    images, masks = get_data(args)
 
     print("Finished data collection.")
 
     train_images, val_images, train_masks, val_masks = train_test_split(
-    images, masks, test_size=0.1, random_state=42, shuffle=True
+    images, masks, test_size=0.2, random_state=17, shuffle=True
     )
-
 
     # reshape the image to simplify the handling of skip connections and maxpooling
     train_dataset = ImageDataset(train_images, train_masks, device, use_patches=False, resize_to=(args.size, args.size))
@@ -118,20 +147,25 @@ def main(encoder):
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=params.BATCH_SIZE, shuffle=True)
 
     model = model_init(args.encoder, args.architecture)
-    
-    model = model.to(device)
-    #loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
-    loss_fn = DiceBCELoss()
-    metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn}
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-
     exp_name = generate_filename(args.encoder, args.architecture, args.size)
     save_name = get_unique_name(exp_name, params.SAVED_MODELS_PATH)
+    
+    if args.model_filename is None:
+        #loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        num_epochs = 40
+    elif args.model_filename and os.path.exists(os.path.join(params.SAVED_MODELS_PATH, args.model_filename)):
+        model.load_state_dict(torch.load(os.path.join(params.SAVED_MODELS_PATH, args.model_filename)))
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        save_name = args.model_filename[:-4] + '_1'
+        num_epochs = 10
+
+    loss_fn = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)
+    metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn, 'patch_f1': patch_f1_fn}
+    model = model.to(device)
 
     wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
-    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, 40, save_name, 1, wandb_run)
-    #torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
+    trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, None, num_epochs, save_name, 1, wandb_run)
 
 
 if __name__ == "__main__":
@@ -140,5 +174,6 @@ if __name__ == "__main__":
     parser.add_argument("--encoder", type=str, default=None)
     parser.add_argument("--size", type=int, default=384)
     parser.add_argument("--n_locs", type=int, default=24) # number of locations to use in the dataset
+    parser.add_argument("--model_filename", type=str, default=None, help="path to the model checkpoint to resume training")
     args = parser.parse_args()
     main(args)
