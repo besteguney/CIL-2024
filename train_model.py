@@ -116,6 +116,7 @@ def get_data(args):
 
 
 def main(args):
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     images, masks = get_data(args)
@@ -123,7 +124,7 @@ def main(args):
     print("Finished data collection.")
 
     train_images, val_images, train_masks, val_masks = train_test_split(
-    images, masks, test_size=0.2, random_state=17, shuffle=True
+    images, masks, test_size=0.1, random_state=22, shuffle=True
     )
 
     train_dataset = ImageDataset(train_images, train_masks, device, use_patches=False, resize_to=(args.size, args.size))
@@ -153,6 +154,7 @@ def main(args):
 
     wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
     trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, None, num_epochs, save_name, 1, wandb_run)
+    wandb.finish()
 
 
 if __name__ == "__main__":
@@ -161,5 +163,6 @@ if __name__ == "__main__":
     parser.add_argument("--encoder", type=str, default=None, help="Specify the encoder type to be used with the architecture (e.g., vgg19, resnet50)")
     parser.add_argument("--size", type=int, default=384, help="The resolution of images to be used for training (default: 384)")
     parser.add_argument("--n_locs", type=int, default=24, help="Number of locations to use in the dataset (default: 24)")
+    parser.add_argument("--model_filename", type=str, default=None, help="Path to the model checkpoint to resume training (if any)")
     args = parser.parse_args()
     main(args)

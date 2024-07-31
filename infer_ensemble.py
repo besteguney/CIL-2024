@@ -41,6 +41,7 @@ def create_ensemble_preds(test_folder, test_subfolder, models_path, device):
     weights = []
 
     for filename in model_dir:
+        print(filename)
         # get configs for the trained model
         configs = filename.split('_')
         architecture = configs[0]
