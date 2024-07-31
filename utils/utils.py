@@ -18,7 +18,6 @@ import segmentation_models_pytorch as smp
 
 # Should this go somewhere else?
 PATCH_SIZE = 16
-CUTOFF = 0.5
 ROOT_PATH = "./"
 
 
@@ -182,7 +181,12 @@ def overlay_image(image_array, mask_array):
 
 def to_preds(logits):
     probs = torch.sigmoid(logits)
-    preds = (probs >= params.CUTOFF).float()
+    preds = (probs >= params.THRESHOLD).float()
+    return preds
+
+def to_preds_array(logits):
+    probs = 1/(1 + np.exp(-logits))
+    preds = np.asarray(probs >= params.THRESHOLD, dtype=float)
     return preds
 
 def to_preds_array(logits):
@@ -194,9 +198,36 @@ def patch_accuracy_fn(y_hat, y):
     # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
     h_patches = y.shape[-2] // params.PATCH_SIZE
     w_patches = y.shape[-1] // params.PATCH_SIZE
+
+    y_hat = torch.sigmoid(y_hat)
     patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
     patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
     return (patches == patches_hat).float().mean()
+
+
+def patch_f1_fn(y_hat, y):
+    # Computes F1 score weighted by patches using params.PATCH_SIZE and params.CUTOFF
+    h_patches = y.shape[-2] // params.PATCH_SIZE
+    w_patches = y.shape[-1] // params.PATCH_SIZE
+
+    y_hat = torch.sigmoid(y_hat)
+    patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
+    patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
+
+    # Flatten patches to compute precision, recall, and F1 score
+    patches_hat = patches_hat.view(-1)
+    patches = patches.view(-1)
+
+    tp = (patches_hat & patches).float().sum()
+    fp = (patches_hat & ~patches).float().sum()
+    fn = (~patches_hat & patches).float().sum()
+
+    precision = tp / (tp + fp + 1e-8)
+    recall = tp / (tp + fn + 1e-8)
+
+    f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
+
+    return f1
 
 def accuracy_fn(y_hat, y):
     # computes classification accuracy
@@ -229,3 +260,19 @@ def ensemble_predict(models, weights, test_images):
     for tensor, weight in zip(predictions, weights):
         weighted_sum_tensor += weight * tensor
     return weighted_sum_tensor
+
+
+def get_unique_name(base, directory):
+    """
+    Given a filepath, append a number to the end if the file already exists.
+    """
+    extension = '.pth'
+    counter = 1
+    filename = f"{base}_{counter}{extension}"
+    while os.path.isfile(os.path.join(directory,filename)):
+        filename = f"{base}_{counter}{extension}"
+        counter += 1
+    return filename[:-4]
+
+def generate_filename(encoder_name, architecture="Unet", img_size=256):
+    return '_'.join([architecture, encoder_name, str(img_size)])
