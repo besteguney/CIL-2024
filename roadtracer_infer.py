@@ -18,6 +18,8 @@ from roadtracer_model1 import RoadTracerModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--file_path", default="ethz-cil-road-segmentation-2024", type=str, help="Path to images to run inference for")
+parser.add_argument("--results_path", default="roadtracer_results_128", type=str, help="Path to save results at")
+
 
 parser.add_argument("--image_size", default=256, type=int, help="The size to which we resize data before training the model")
 parser.add_argument("--angle_samples", default=32, type=int, help="How many angles are considered for the next roadtracer step")
@@ -26,7 +28,7 @@ parser.add_argument("--step_distance", default=16.0, type=float, help="The lengt
 
 parser.add_argument("--batch_size", default=16, type=int, help="The batch size used when training")
 parser.add_argument("--rotation_samples", default=1, type=int, help="The batch size used when training")
-parser.add_argument("--position_samples", default=64, type=int, help="The batch size used when training")
+parser.add_argument("--position_samples", default=128, type=int, help="How many points should be tested in one dimension")
 
 
 parser.add_argument("--validation_size", default=24, type=int, help="The size of the validation set (out of 144 images in the training set)")
@@ -97,8 +99,6 @@ def inference_immediate(image_full_size, model, args):
         action_image = action_image / args.rotation_samples
         angle_image = angle_image / action_image[..., None]
 
-
-    
     # np.save("action_image.npy", action_image)
     return action_image, angle_image
 
@@ -175,12 +175,13 @@ if __name__ == "__main__":
     image_paths = sorted(glob.glob(f"{args.file_path}/training/images/*.png"))
     mask_paths = sorted(glob.glob(f"{args.file_path}/training/groundtruth/*.png"))
 
+    os.makedirs(args.results_path, exist_ok=True)
 
     f1_scores = []
     for image_fname, mask_fname in zip(image_paths, mask_paths):
         image_base_name = image_fname.split("\\")[-1] 
-        actions_result_fname = f"roadtracer_results/{image_base_name.replace('.png', '_actions.npy')}"
-        angles_result_fname = f"roadtracer_results/{image_base_name.replace('.png', '_angles.npy')}"
+        actions_result_fname = f"{args.results_path}/{image_base_name.replace('.png', '_actions.npy')}"
+        angles_result_fname = f"{args.results_path}/{image_base_name.replace('.png', '_angles.npy')}"
 
         image = open_image(image_fname)[..., :3]
         

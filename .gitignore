@@ -7,3 +7,4 @@ tensorboard_old_runs
 log
 wandb
 roadtracer_results
+roadtracer_results_128
