@@ -255,3 +255,19 @@ def ensemble_predict(models, weights, test_images):
     for tensor, weight in zip(predictions, weights):
         weighted_sum_tensor += weight * tensor
     return weighted_sum_tensor
+
+
+def get_unique_name(base, directory):
+    """
+    Given a filepath, append a number to the end if the file already exists.
+    """
+    extension = '.pth'
+    counter = 1
+    filename = f"{base}_{counter}{extension}"
+    while os.path.isfile(os.path.join(directory,filename)):
+        filename = f"{base}_{counter}{extension}"
+        counter += 1
+    return filename[:-4]
+
+def generate_filename(encoder_name, architecture="Unet", img_size=256):
+    return '_'.join([architecture, encoder_name, str(img_size)])
