@@ -189,6 +189,11 @@ def to_preds_array(logits):
     preds = np.asarray(probs >= params.THRESHOLD, dtype=float)
     return preds
 
+def to_preds_array(logits):
+    probs = 1/(1 + np.exp(-logits))
+    preds = np.asarray(probs >= params.CUTOFF, dtype=float)
+    return preds
+
 def patch_accuracy_fn(y_hat, y):
     # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
     h_patches = y.shape[-2] // params.PATCH_SIZE
