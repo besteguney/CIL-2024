@@ -1,0 +1,5 @@
+model_type: UNet
+loss_fn: BCE
+wandb_group: UNet
+channels: [3,64,128,256,512,1024]
+activation: RELU

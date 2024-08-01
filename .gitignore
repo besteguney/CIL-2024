@@ -1,3 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+wandb/
+
+# data
+data/*
+
+
+# ignore pytorch models
+**/*.ckpt
+**/*.pt
+**/*.pth
 ethz-cil-road-segmentation-2024
 .idea
 tensorboard
@@ -7,7 +34,9 @@ tensorboard_old_runs
 log
 wandb
 roadtracer_results
+
 roadtracer_results_128
 roadtracer_results_128_test
 dummy_submission.csv
 models
+

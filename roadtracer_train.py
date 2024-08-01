@@ -7,7 +7,7 @@ import torch
 import cv2
 from tqdm import tqdm
 
-import utils
+from utils import utils
 from roadtracer_graph import BaseNode, Node, RoadTracerImage, get_oracle_prediction, filter_samples
 from roadtracer_utils import get_circle_sample_points, get_patch, to_pytorch_img, angle_sample_points
 from roadtracer_logging import Logger, LogMetrics

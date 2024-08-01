@@ -1,103 +1,19 @@
 import torch
 import parameters as params
 import segmentation_models_pytorch as smp
-import utils
+from utils import utils
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+
+from utils.utils import accuracy_fn, to_preds
+import os
+from torchmetrics import F1Score
 import datetime
 
 
-def patch_accuracy_fn(y_hat, y):
-    # computes accuracy weighted by patches (metric used on Kaggle for evaluation)
-    h_patches = y.shape[-2] // params.PATCH_SIZE
-    w_patches = y.shape[-1] // params.PATCH_SIZE
-    patches_hat = y_hat.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    patches = y.reshape(-1, 1, h_patches, params.PATCH_SIZE, w_patches, params.PATCH_SIZE).mean((-1, -3)) > params.CUTOFF
-    return (patches == patches_hat).float().mean()
-
-
-def accuracy_fn(y_hat, y):
-    # computes classification accuracy
-    return (y_hat.round() == y.round()).float().mean()
-
-
-def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs):
-    # training loop
-    logdir = f'./tensorboard/{datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")}'
-    writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
-
-    history = {}  # collects metrics at the end of each epoch
-
-    for epoch in range(n_epochs):  # loop over the dataset multiple times
-
-        # initialize metric list
-        metrics = {'loss': [], 'val_loss': []}
-        for k, _ in metric_fns.items():
-            metrics[k] = []
-            metrics['val_'+k] = []
-
-        # training
-        model.train()
-        for (x, y) in tqdm(train_dataloader, ncols=150, desc=f"Epoch {epoch+1}/{n_epochs}"):
-            optimizer.zero_grad()  # zero out gradients
-            y_hat = model(x)  # forward pass
-            loss = loss_fn(y_hat, y)
-            loss.backward()  # backward pass
-            optimizer.step()  # optimize weights
-
-            # log partial metrics
-            metrics['loss'].append(loss.item())
-            for k, fn in metric_fns.items():
-                metrics[k].append(fn(y_hat, y))
-            # pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
-
-        if eval_dataloader is None:
-            continue
-
-        # validation
-        model.eval()
-        first = True
-        with torch.no_grad():  # do not keep track of gradients
-            for (x, y) in eval_dataloader:
-                y_hat = model(x)  # forward pass
-                loss = loss_fn(y_hat, y)
-
-                if first:
-                    writer.add_images("input", x, epoch)
-                    writer.add_images("output", y_hat, epoch)
-                    writer.add_images("ground truth", y, epoch)
-                    first = False
-
-                # log partial metrics
-                metrics['val_loss'].append(loss.item())
-                for k, fn in metric_fns.items():
-                    metrics['val_'+k].append(fn(y_hat, y))
-
-        # summarize metrics, log to tensorboard and display
-        history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
-        for k, v in history[epoch].items():
-            writer.add_scalar(k, v, epoch)
-        
-        if (epoch + 1) % 10 == 0:
-            # save model!!!
-            ...
-
-        writer.flush()
-        # print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-        # utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
-
-    print('Finished Training')
-    # plot loss curves
-    plt.plot([v['loss'] for k, v in history.items()], label='Training Loss')
-    plt.plot([v['val_loss'] for k, v in history.items()], label='Validation Loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epochs')
-    plt.legend()
-    plt.show()
-
-
-def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq):
+def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
+    f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
     # training loop
     logdir = './tensorboard/net'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
@@ -107,7 +23,11 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
         # initialize metric list
-        metrics = {'loss': [], 'val_loss': [], 'f1_train': [], 'f1_val': []}
+        metrics = {
+            'loss': [], 'val_loss': [], 
+            'f1_train': [], 'f1_val': [], 
+            'acc_train': [], 'acc_val': []
+        }
         for k, _ in metric_fns.items():
             metrics[k] = []
             metrics['val_'+k] = []
@@ -122,38 +42,105 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
             loss.backward()  # backward pass
             optimizer.step()  # optimize weights
 
-            # log partial metrics
-            metrics['loss'].append(loss.item())
-            tp, fp, fn, tn = smp.metrics.get_stats(y_hat.long(), y.long(), mode="binary")
-            metrics['f1_train'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
+            metrics['loss'].append(loss.item()) 
+            predictions = to_preds(y_hat)
+            # calculate f1 score
+            f1_score_value = f1_metric(predictions.long(), y.long())
+            metrics['f1_train'].append(f1_score_value.item())
+
             for k, fn in metric_fns.items():
                 metrics[k].append(fn(y_hat, y).item())
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
+        
 
-        if (eval_dataloader == None): 
-            continue
-
-        elif (epoch % val_freq == 0) or (epoch==n_epochs):
+        if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
             # validation
             model.eval()
             with torch.no_grad():  # do not keep track of gradients
                 for (x, y) in eval_dataloader:
                     y_hat = model(x)  # forward pass
                     loss = loss_fn(y_hat, y)
-
-                    # log partial metrics
                     metrics['val_loss'].append(loss.item())
-                    tp, fp, fn, tn = smp.metrics.get_stats(y_hat.long(), y.long(), mode="binary")
-                    metrics['f1_val'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
+                    
+                    predictions = to_preds(y_hat)
+                    # calculate f1 score
+                    f1_score_value = f1_metric(predictions.long(), y.long())
+                    metrics['f1_val'].append(f1_score_value.item())
+
                     for k, fn in metric_fns.items():
                         metrics['val_'+k].append(fn(y_hat, y).item())
 
             # summarize metrics, log to tensorboard and display
-            history[epoch] = {k: sum(v) / len(v) for k, v in metrics.items()}
+            history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
             for k, v in history[epoch].items():
                 writer.add_scalar(k, v, epoch)
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-            utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+
+        
+def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
+    f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
+    # training loop
+    logdir = f'./tensorboard/{datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")}'
+    writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
+
+    history = {}  # collects metrics at the end of each epoch
+
+    for epoch in range(n_epochs):  # loop over the dataset multiple times
+
+        # initialize metric list
+        metrics = {
+            'loss': [], 'val_loss': [], 
+            'f1_train': [], 'f1_val': [], 
+            'acc_train': [], 'acc_val': []
+        }
+        for k, _ in metric_fns.items():
+            metrics[k] = []
+            metrics['val_'+k] = []
+
+        # training
+        model.train()
+        pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{n_epochs}')
+        for (x, y) in pbar:
+            optimizer.zero_grad()  # zero out gradients
+            y_hat = model(x)  # forward pass
+            loss = loss_fn(y_hat, y)
+            loss.backward()  # backward pass
+            optimizer.step()  # optimize weights
+
+            metrics['loss'].append(loss.item()) 
+            predictions = to_preds(y_hat)
+            # calculate f1 score
+            f1_score_value = f1_metric(predictions.long(), y.long())
+            metrics['f1_train'].append(f1_score_value.item())
+
+            for k, fn in metric_fns.items():
+                metrics[k].append(fn(y_hat, y).item())
+            pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
+        
+
+        if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
+            # validation
+            model.eval()
+            with torch.no_grad():  # do not keep track of gradients
+                for (x, y) in eval_dataloader:
+                    y_hat = model(x)  # forward pass
+                    loss = loss_fn(y_hat, y)
+                    metrics['val_loss'].append(loss.item())
+                    
+                    predictions = to_preds(y_hat)
+                    # calculate f1 score
+                    f1_score_value = f1_metric(predictions.long(), y.long())
+                    metrics['f1_val'].append(f1_score_value.item())
+
+                    for k, fn in metric_fns.items():
+                        metrics['val_'+k].append(fn(y_hat, y).item())
+
+            # summarize metrics, log to tensorboard and display
+            history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
+            for k, v in history[epoch].items():
+                writer.add_scalar(k, v, epoch)
+            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
+            #utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves
@@ -163,6 +150,79 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
     plt.xlabel('Epochs')
     plt.legend()
     plt.show()
+
+
+def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, scheduler, n_epochs, save_name, val_freq=10, wandb_run=None):
+    history = {}  # collects metrics at the end of each epoch
+    f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
+    best_val_f1 = 0.0  # Initialize the best validation F1 score
+
+    for epoch in range(n_epochs):  # loop over the dataset multiple times
+
+        # initialize metric list
+        metrics = {
+            'loss': [], 'val_loss': [], 
+            'f1_train': [], 'f1_val': [], 
+            'acc_train': [], 'acc_val': []
+        }
+        for k, _ in metric_fns.items():
+            metrics[k] = []
+            metrics['val_'+k] = []
+
+        pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{n_epochs}')
+        # training
+        model.train()
+        for (x, y) in pbar:
+            optimizer.zero_grad()  # zero out gradients
+            y_hat = model(x)  # forward pass
+            loss = loss_fn(y_hat, y)
+            loss.backward()  # backward pass
+            optimizer.step()  # optimize weights
+
+            metrics['loss'].append(loss.item()) 
+            predictions = to_preds(y_hat)
+            # calculate f1 score
+            f1_score_value = f1_metric(predictions.long(), y.long())
+            metrics['f1_train'].append(f1_score_value.item())
+
+            for k, fn in metric_fns.items():
+                metrics[k].append(fn(y_hat, y).item())
+            pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
+        
+        if scheduler is not None:
+            scheduler.step()
+
+        if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
+            # validation
+            model.eval()
+            with torch.no_grad():  # do not keep track of gradients
+                for (x, y) in eval_dataloader:
+                    y_hat = model(x)  # forward pass
+                    loss = loss_fn(y_hat, y)
+                    metrics['val_loss'].append(loss.item())
+                    
+                    predictions = to_preds(y_hat)
+                    # calculate f1 score
+                    f1_score_value = f1_metric(predictions.long(), y.long())
+                    metrics['f1_val'].append(f1_score_value.item())
+
+                    for k, fn in metric_fns.items():
+                        metrics['val_'+k].append(fn(y_hat, y).item())
+
+            # summarize metrics, log to W&B and display
+            history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
+            if wandb_run:
+                wandb_run.log(history[epoch], step=epoch)
+            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
+
+            # Check if the current validation F1 score is the best so far
+            current_val_f1 = history[epoch]['f1_val']
+            if current_val_f1 > best_val_f1:
+                best_val_f1 = current_val_f1
+                torch.save(model.state_dict(), os.path.join(params.SAVED_MODELS_PATH, save_name + '.pth'))
+                print(f'New best validation F1 score: {best_val_f1}. Model saved.')
+
+    print('Finished Training')
 
 def train_pix2pix(train_dataloader, eval_dataloader, generator, discriminator, g_loss, d_loss, metric_fns, g_optimizer, d_optimizer, n_epochs):
     # training loop
@@ -249,7 +309,7 @@ def train_pix2pix(train_dataloader, eval_dataloader, generator, discriminator, g
         for k, v in history[epoch].items():
           writer.add_scalar(k, v, epoch)
         print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-        utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
+        utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
 
     print('Finished Training')
     # plot loss curves

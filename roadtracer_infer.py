@@ -198,7 +198,7 @@ if __name__ == "__main__":
         # ax2.imshow(pred_patches)
         # plt.show()
 
-        #score = f1_score_fn(pred_patches, true_patches)
-        #f1_scores.append(scores[3])
+        # score = f1_score_fn(pred_patches, true_patches)
+        # f1_scores.append(scores[3])
 
-        #print (f"Current F1 score = {scores}, mean = {np.mean(f1_scores)}")
+        # print (f"Current F1 score = {scores}, mean = {np.mean(f1_scores)}")
