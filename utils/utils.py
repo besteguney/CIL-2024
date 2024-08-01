@@ -157,7 +157,7 @@ def load_images(image_folder_path, is_label = False):
             img = img.convert('L')
         elif img.mode == 'RGBA':
             img = img.convert('RGB')
-        images.append(np.array(img))
+        images.append(np.array(img).astype(np.float32) / 255.0)
     return images
 
 def show_image(image_array, mask_array):
