@@ -3,7 +3,7 @@ ROOT_PATH = "data"
 ROOT_PATH2 = "ethz-cil-road-segmentation-2024"
 SAVED_MODELS_PATH = "saved_models"
 PATCH_SIZE = 16  # pixels per side of square patches
-VAL_SIZE = 10  # size of the validation set (number of images)
+VAL_SIZE = 24  # size of the validation set (number of images)
 CUTOFF = 0.25  # minimum average brightness for a mask patch to be classified as containing road
 
 THRESHOLD = 0.5 # threshold for predicting positive class to produce pixel predictions (not mask)
@@ -11,7 +11,7 @@ THRESHOLD = 0.5 # threshold for predicting positive class to produce pixel predi
 N_ESTIMATORS = 3
 
 # Model Parameters
-N_EPOCHS = 20
+N_EPOCHS = 1000
 BATCH_SIZE = 4
 RESIZE = 384
 

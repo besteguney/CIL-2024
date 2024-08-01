@@ -3,13 +3,14 @@ import parameters as params
 import segmentation_models_pytorch as smp
 from utils import utils
 import matplotlib.pyplot as plt
-from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
 from utils.utils import accuracy_fn, to_preds
 import os
 from torchmetrics import F1Score
+import datetime
+
 
 def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
@@ -79,7 +80,7 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
 def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
     # training loop
-    logdir = './tensorboard/net'
+    logdir = f'./tensorboard/{datetime.datetime.now().strftime("%d-%m-%Y_%H-%M-%S")}'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
 
     history = {}  # collects metrics at the end of each epoch
@@ -96,9 +97,9 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
             metrics[k] = []
             metrics['val_'+k] = []
 
-        pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{n_epochs}')
         # training
         model.train()
+        pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{n_epochs}')
         for (x, y) in pbar:
             optimizer.zero_grad()  # zero out gradients
             y_hat = model(x)  # forward pass
