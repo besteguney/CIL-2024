@@ -44,3 +44,11 @@ model_filename is only used if you want to continue training a model
 To create a submission put all models trained with train_model.py into the folder "saved_models/"
 Then run:
 python .\infer_ensemble.py "submission_filename.csv"
+
+# Train Roadtracer
+run:
+python .\roadtracer_main.py
+
+# Roadtracer Inference
+run:
+python roadtracer_infer.py --load_model 'path/to/roadtracer/checkpoint/file'
