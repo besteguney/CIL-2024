@@ -38,7 +38,7 @@ def linear_interpolation_torch(img, points):
 def solve_for_mask(actions, angles, args):
     position_count, _, angle_samples = angles.shape
     
-    THRESHOLD = 0.005
+    THRESHOLD = 0.012
     scale_down = 4
     
     coord_row = torch.linspace(0, args.image_size // scale_down, position_count)
@@ -139,7 +139,7 @@ if __name__ == "__main__":
         actions = np.load(f"{args.result_path}/satimage_{i}_actions.npy")
         angles = np.load(f"{args.result_path}/satimage_{i}_angles.npy")
         
-        pred_mask = cv2.resize((solve_for_mask_2(actions, angles, args)).astype(np.float32), (400, 400), interpolation=cv2.INTER_LINEAR)
+        pred_mask = cv2.resize((solve_for_mask(actions, angles, args)).astype(np.float32), (400, 400), interpolation=cv2.INTER_LINEAR)
         
         if not args.run_test:
             mask_fname = f"{args.ground_truth_path}/satimage_{i}.png"
