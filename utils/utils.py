@@ -3,7 +3,6 @@ import os
 import re
 import cv2
 import numpy as np
-import utils
 import torch
 import matplotlib.pyplot as plt
 from glob import glob
