@@ -8,16 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import tqdm
 
 from utils.utils import accuracy_fn, to_preds
-<<<<<<< HEAD
 import os
 from torchmetrics import F1Score
 
 def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
-=======
-
-def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
     # training loop
     logdir = './tensorboard/net'
     writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
@@ -58,10 +53,7 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
         
 
         if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
-<<<<<<< HEAD
             # validation
-=======
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
             model.eval()
             with torch.no_grad():  # do not keep track of gradients
                 for (x, y) in eval_dataloader:
@@ -82,7 +74,6 @@ def train(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimiz
             for k, v in history[epoch].items():
                 writer.add_scalar(k, v, epoch)
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-<<<<<<< HEAD
 
         
 def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
@@ -149,9 +140,6 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
                 writer.add_scalar(k, v, epoch)
             print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
             #utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
-=======
-            utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
 
     print('Finished Training')
     # plot loss curves
@@ -162,20 +150,11 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
     plt.legend()
     plt.show()
 
-<<<<<<< HEAD
 
 def train_smp_wandb(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, scheduler, n_epochs, save_name, val_freq=10, wandb_run=None):
     history = {}  # collects metrics at the end of each epoch
     f1_metric = F1Score(task='binary', num_classes=2, average='macro').to(next(model.parameters()).device)
     best_val_f1 = 0.0  # Initialize the best validation F1 score
-=======
-def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, optimizer, n_epochs, val_freq=10):
-    # training loop
-    logdir = './tensorboard/net'
-    writer = SummaryWriter(logdir)  # tensorboard writer (can also log images)
-
-    history = {}  # collects metrics at the end of each epoch
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
 
     for epoch in range(n_epochs):  # loop over the dataset multiple times
 
@@ -198,7 +177,6 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
             loss = loss_fn(y_hat, y)
             loss.backward()  # backward pass
             optimizer.step()  # optimize weights
-<<<<<<< HEAD
 
             metrics['loss'].append(loss.item()) 
             predictions = to_preds(y_hat)
@@ -206,24 +184,12 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
             f1_score_value = f1_metric(predictions.long(), y.long())
             metrics['f1_train'].append(f1_score_value.item())
 
-=======
-
-            metrics['loss'].append(loss.item()) 
-            predictions = to_preds(y_hat)
-            # calculate f1 score
-            tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
-            metrics['f1_train'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
-
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
             for k, fn in metric_fns.items():
                 metrics[k].append(fn(y_hat, y).item())
             pbar.set_postfix({k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0})
         
-<<<<<<< HEAD
         if scheduler is not None:
             scheduler.step()
-=======
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
 
         if eval_dataloader and ((epoch % val_freq == 0) or (epoch == n_epochs - 1)):
             # validation
@@ -236,18 +202,12 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
                     
                     predictions = to_preds(y_hat)
                     # calculate f1 score
-<<<<<<< HEAD
                     f1_score_value = f1_metric(predictions.long(), y.long())
                     metrics['f1_val'].append(f1_score_value.item())
-=======
-                    tp, fp, fn, tn = smp.metrics.get_stats(predictions.long(), y.long(), mode="binary")
-                    metrics['f1_val'].append(smp.metrics.f1_score(tp, fp, fn, tn, reduction="micro-imagewise"))
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
 
                     for k, fn in metric_fns.items():
                         metrics['val_'+k].append(fn(y_hat, y).item())
 
-<<<<<<< HEAD
             # summarize metrics, log to W&B and display
             history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
             if wandb_run:
@@ -262,23 +222,6 @@ def train_smp(train_dataloader, eval_dataloader, model, loss_fn, metric_fns, opt
                 print(f'New best validation F1 score: {best_val_f1}. Model saved.')
 
     print('Finished Training')
-=======
-            # summarize metrics, log to tensorboard and display
-            history[epoch] = {k: sum(v)/len(v) for k, v in metrics.items() if len(v) > 0}
-            for k, v in history[epoch].items():
-                writer.add_scalar(k, v, epoch)
-            print(' '.join(['\t- '+str(k)+' = '+str(v)+'\n ' for (k, v) in history[epoch].items()]))
-            utils.utils.show_val_samples(x.detach().cpu().numpy(), y.detach().cpu().numpy(), y_hat.detach().cpu().numpy())
-
-    print('Finished Training')
-    # plot loss curves
-    plt.plot([v['loss'] for k, v in history.items()], label='Training Loss')
-    plt.plot([v['val_loss'] for k, v in history.items()], label='Validation Loss')
-    plt.ylabel('Loss')
-    plt.xlabel('Epochs')
-    plt.legend()
-    plt.show()
->>>>>>> 987322b8a69ed9c5a083c2d74dae486e77cd0101
 
 def train_pix2pix(train_dataloader, eval_dataloader, generator, discriminator, g_loss, d_loss, metric_fns, g_optimizer, d_optimizer, n_epochs):
     # training loop
