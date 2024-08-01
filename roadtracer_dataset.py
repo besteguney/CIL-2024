@@ -1,7 +1,7 @@
 import torch.utils.data
 from torch.utils.data import Dataset
 import numpy as np
-import utils
+from utils import utils
 import os
 from sklearn.model_selection import train_test_split
 import torchvision.transforms.v2 as torchvision_transforms
