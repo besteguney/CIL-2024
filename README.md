@@ -54,11 +54,11 @@ Then run:
 python .\infer_ensemble.py "submission_filename.csv"
 
 # Train Roadtracer
-run:
+To train our roadtracer implementaion run:
 
 python .\roadtracer_main.py
 
 # Roadtracer Inference
-run:
+To run roadtracer inference on images run:
 
 python roadtracer_infer.py --load_model 'path/to/roadtracer/checkpoint/file'
