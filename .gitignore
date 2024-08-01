@@ -8,4 +8,6 @@ log
 wandb
 roadtracer_results
 roadtracer_results_128
+roadtracer_results_128_test
+dummy_submission.csv
 models
