@@ -139,7 +139,10 @@ def main(args):
     metric_fns = {'acc': accuracy_fn, 'patch_acc': patch_accuracy_fn, 'patch_f1': patch_f1_fn}
     model = model.to(device)
 
-    wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
+    try:
+        wandb_run = wandb.init(project="cil", entity="emmy-zhou", name=save_name)
+    except:
+        wandb_run = None
     trainer.train_smp_wandb(train_dataloader, val_dataloader, model, loss_fn, metric_fns, optimizer, None, num_epochs, save_name, 1, wandb_run)
     wandb.finish()
 

@@ -90,7 +90,7 @@ def create_ensemble_preds(test_folder, test_subfolder, models_path, device):
     return final_pred
 
 
-def main():
+def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     create_ensemble_submission("test", "images",  args.submission_name, params.SAVED_MODELS_PATH, device)
 

@@ -4,7 +4,7 @@ import segmentation_models_pytorch as smp
 from utils import utils
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 from utils.utils import accuracy_fn, to_preds
 import os
