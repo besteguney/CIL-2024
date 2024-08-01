@@ -147,7 +147,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train segmentation model")
     parser.add_argument("--architecture", type=str, default="Unet", help="Specify the architecture of the model (e.g., Unet, ResUNet)")
-    parser.add_argument("--encoder", type=str, default=None, help="Specify the encoder type to be used with the architecture (e.g., vgg19, resnet50)")
+    parser.add_argument("--encoder", type=str, default=None, help=f"Specify the encoder type to be used with the architecture out of {params.ENCODERS.keys()}")
     parser.add_argument("--size", type=int, default=384, help="The resolution of images to be used for training (default: 384)")
     parser.add_argument("--n_locs", type=int, default=24, help="Number of locations to use in the dataset (default: 24)")
     parser.add_argument("--model_filename", type=str, default=None, help="Path to the model checkpoint to resume training (if any)")

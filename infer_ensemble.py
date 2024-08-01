@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import re
 import os
 import cv2
@@ -87,3 +88,14 @@ def create_ensemble_preds(test_folder, test_subfolder, models_path, device):
     final_pred = sum_prediction / total_weight
 
     return final_pred
+
+
+def main():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    create_ensemble_submission("test", "images",  args.submission_name, params.SAVED_MODELS_PATH, device)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Train segmentation model")
+    parser.add_argument("submission_name", type=str, help="specify submission name")
+    args = parser.parse_args()
+    main(args)
