@@ -11,22 +11,9 @@ import random
 import segmentation_models_pytorch as smp
 import argparse
 import wandb
-from utils.utils import patch_accuracy_fn, accuracy_fn, patch_f1_fn, get_unique_name, generate_filename
+from utils.utils import patch_accuracy_fn, accuracy_fn, patch_f1_fn, get_unique_name, generate_filename, load_images
 from utils.smp_helper import model_init
 
-
-# For original dataset
-def load_images(image_folder_path, is_label = False):
-    images = []
-    for filename in os.listdir(image_folder_path):
-        img_path = os.path.join(image_folder_path, filename)
-        img = Image.open(img_path)
-        if (is_label):
-            img = img.convert('L')
-        elif img.mode == 'RGBA':
-            img = img.convert('RGB')
-        images.append(np.array(img).astype(np.float32) / 255.0)
-    return images
 
 def load_location_images(location_id):
     data_path = "data"
@@ -87,14 +74,14 @@ def load_extra_data(location_id):
         all_masks.extend(masks)
     return all_images, all_masks
 
-def get_data(args):
+def get_data(location):
     images_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'images'), False)
     masks_list = load_images(os.path.join('ethz-cil-road-segmentation-2024', 'training', 'groundtruth'), True)
 
     images_extra = []
     masks_extra = []
-    if args.n_locs > 0:
-        images_extra, masks_extra = load_extra_data(args.n_locs)
+    if location > 0:
+        images_extra, masks_extra = load_extra_data(location)
 
     images_list.extend(images_extra)
     masks_list.extend(masks_extra)
@@ -119,7 +106,7 @@ def main(args):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    images, masks = get_data(args)
+    images, masks = get_data(args.n_locs)
 
     print("Finished data collection.")
 

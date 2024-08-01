@@ -67,29 +67,29 @@ ENCODERS = {
 
 "Specifies the percentage of data to take from each location in creating the external dataset"
 LOCATIONS = {
-    0: 0.8,  # Los Angeles, USA (first area)
-    1: 0.8,  # Los Angeles, USA (second area)
-    2: 0.8,  # Los Angeles, USA (third area)
-    3: 0.8,  # Chicago, USA
-    4: 0.8,  # Houston, USA
-    5: 0.8,  # Phoenix, USA
-    6: 0.8,  # Philadelphia, USA (first area)
-    7: 0.8,  # Philadelphia, USA (second area)
-    8: 0.8,  # San Francisco, USA (first area)
-    9: 0.8,  # San Francisco, USA (second area)
-    10: 0.8,  # Boston, USA
-    11: 0.2,  # Tokyo, Japan
-    12: 0.4,  # New York City, USA
+    0: 1.0,  # Los Angeles, USA (first area)
+    1: 1.0,  # Los Angeles, USA (second area)
+    2: 1.0,  # Los Angeles, USA (third area)
+    3: 1.0,  # Chicago, USA
+    4: 1.0,  # Houston, USA
+    5: 1.0,  # Phoenix, USA
+    6: 1.0,  # Philadelphia, USA (first area)
+    7: 1.0,  # Philadelphia, USA (second area)
+    8: 1.0,  # San Francisco, USA (first area)
+    9: 1.0,  # San Francisco, USA (second area)
+    10: 1.0,  # Boston, USA
+    11: 0.5,  # Tokyo, Japan
+    12: 1.0,  # New York City, USA
     13: 0.0,  # Sao Paulo, Brazil
     14: 0.0,  # Moscow, Russia
-    15: 0.1,  # Paris, France
-    16: 0.1,  # Zurich, Switzerland
-    17: 0.1,  # London, United Kingdom
-    18: 0.1,  # Berlin, Germany
-    19: 0.8, # San Diego, California
-    20: 0.8, # Miami, Florida
-    21: 0.8, # Seattle, Washington
-    22: 0.8, # Atlanta, Georgia
-    23: 0.8, # Las Vegas, Nevada
+    15: 0.5,  # Paris, France
+    16: 0.5,  # Zurich, Switzerland
+    17: 0.5,  # London, United Kingdom
+    18: 0.5,  # Berlin, Germany
+    19: 1.0, # San Diego, California
+    20: 1.0, # Miami, Florida
+    21: 1.0, # Seattle, Washington
+    22: 1.0, # Atlanta, Georgia
+    23: 1.0, # Las Vegas, Nevada
     24: 0.0 # MASSAC Dataset
 }
